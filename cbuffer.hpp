@@ -1,3 +1,6 @@
+#ifndef C_BUFFER_HPP
+#define C_BUFFER_HPP
+
 #include <stdio.h>
 #include <stdint.h>
 #include <sys/mman.h>
@@ -59,37 +62,21 @@ public:
         Allocate();
     };
 
-    void Allocate()
-    {
-        if (VSize < PSize)
-        {
-            VSize = PSize;
-        }
-
-        void *Base = mmap(NULL, VSize, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-        Data = (T *)Base;
-
-        int fd = memfd_create("cbuffer", 0);
-        ftruncate(fd, PSize);
-
-        for (int i = 0; i < GetPageCount(); ++i)
-        {
-            void *addr = (char *)Base + (i * PSize);
-            mmap(addr, PSize, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, fd, 0);
-        }
-        close(fd);
-    };
-
     ~CBuffer()
     {
-        if (Data)
+        if (Data != nullptr)
         {
             if (munmap(Data, VSize) == -1)
             {
-                fprintf(stderr, "ERROR: Unable to unallocate c_buffer");
+                const char *error_msg = strerror(errno);
+                fprintf(stderr, "CBuffer Cleanup Error: %s\n", error_msg);
             }
+            Data = nullptr;
         }
     };
+
+    CBuffer(const CBuffer &) = delete;
+    CBuffer &operator=(const CBuffer &) = delete;
 
     // How many items fit in your virtual buffer
     size_t GetVItemCount()
@@ -136,6 +123,40 @@ public:
         }
         return Data[index];
     };
+
+private:
+    void Allocate()
+    {
+        if (VSize < PSize)
+        {
+            VSize = PSize;
+        }
+
+        void *Base = mmap(NULL, VSize, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (Base == MAP_FAILED)
+        {
+            throw std::runtime_error("Virtual reservation failed")
+        }
+        Data = static_cast<T *>(base);
+
+        int fd = memfd_create("cbuffer", 0);
+        if (fd == -1)
+        {
+            throw std::runtime_error("memfd_create failed");
+        }
+        ftruncate(fd, PSize);
+
+        for (int i = 0; i < GetPageCount(); ++i)
+        {
+            void *addr = (char *)Base + (i * PSize);
+            if (mmap(addr, PSize, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, fd, 0) == MAP_FAILED)
+            {
+                close(fd);
+                throw std::runtime_error("Physical mapping failed");
+            }
+        }
+        close(fd);
+    };
 };
 
 int main()
@@ -143,3 +164,5 @@ int main()
     CBuffer<uint32_t> myBuffer(32 * 1024 * 1024, 2 * 4096);
     return 0;
 }
+
+#endif
