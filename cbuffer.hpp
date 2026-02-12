@@ -5,10 +5,12 @@
 #include <stdint.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#include <cerrno>
+#include <cstring>
 #include <type_traits>
 #include <stdexcept>
 
-size_t BitCeil(size_t v)
+inline size_t BitCeil(size_t v)
 {
     if (v <= 1)
     {
@@ -55,9 +57,9 @@ public:
             size_t pbuffer_size_) : VSize(BitCeil(vbuffer_size_)),
                                     PSize(BitCeil(pbuffer_size_))
     {
-        if (PSize < sysconf(_SC_PAGESIZE))
+        if (PSize < static_cast<size_t>(sysconf(_SC_PAGESIZE)))
         {
-            PSize = sysconf(_SC_PAGESIZE);
+            PSize = static_cast<size_t>(sysconf(_SC_PAGESIZE));
         }
         Allocate();
     };
@@ -79,19 +81,19 @@ public:
     CBuffer &operator=(const CBuffer &) = delete;
 
     // How many items fit in your virtual buffer
-    size_t GetVItemCount()
+    size_t GetVItemCount() const
     {
         return VSize / sizeof(T);
     };
 
     // How many items fit in your physical buffer
-    size_t GetPItemCount()
+    size_t GetPItemCount() const
     {
         return PSize / sizeof(T);
     };
 
     // Virtual pages over your physical page
-    int GetPageCount()
+    size_t GetPageCount() const
     {
         return VSize / PSize;
     };
@@ -135,9 +137,9 @@ private:
         void *Base = mmap(NULL, VSize, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         if (Base == MAP_FAILED)
         {
-            throw std::runtime_error("Virtual reservation failed")
+            throw std::runtime_error("Virtual reservation failed");
         }
-        Data = static_cast<T *>(base);
+        Data = static_cast<T *>(Base);
 
         int fd = memfd_create("cbuffer", 0);
         if (fd == -1)
@@ -146,9 +148,10 @@ private:
         }
         ftruncate(fd, PSize);
 
-        for (int i = 0; i < GetPageCount(); ++i)
+        for (size_t i = 0; i < GetPageCount(); ++i)
         {
             void *addr = (char *)Base + (i * PSize);
+            // printf("%d\n", i);
             if (mmap(addr, PSize, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, fd, 0) == MAP_FAILED)
             {
                 close(fd);
@@ -158,11 +161,5 @@ private:
         close(fd);
     };
 };
-
-int main()
-{
-    CBuffer<uint32_t> myBuffer(32 * 1024 * 1024, 2 * 4096);
-    return 0;
-}
 
 #endif

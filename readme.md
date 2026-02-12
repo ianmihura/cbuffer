@@ -19,7 +19,7 @@ When an index exceeds the size of the physical buffer, the CPU’s Memory Manage
 
 ```cpp
 // Create a buffer that feels like 1MB but only uses 4KB of physical RAM
-CBuffer<uint8_t> buffer(1024 * 1024, 4096);
+CBuffer<uint8_t> buffer(1024 * 1024);
 
 // Normal access
 buffer[82] = 12;
@@ -30,6 +30,13 @@ buffer[82 + 1024] = 51;
 
 assert(buffer[0] == 51);
 
+```
+
+### Allocate bigger buffers
+
+```cpp
+// Create a buffer that feels like 10MB but only uses 1MB of physical RAM
+CBuffer<uint8_t> buffer(10 * 1024 * 1024, 1024 * 1024);
 ```
 
 ### Safety Features
