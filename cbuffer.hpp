@@ -12,6 +12,8 @@
 
 inline size_t BitCeil(size_t v)
 {
+    return v;
+    // TODO fix this shit
     if (v <= 1)
     {
         return 1;

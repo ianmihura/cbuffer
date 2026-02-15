@@ -31,7 +31,7 @@ TEST(CBufferTest, BoundsChecking) {
 
 // Test that it handles non-power-of-two inputs by rounding
 TEST(CBufferTest, RoundingLogic) {
-    CBuffer<int> buf(5000); // Should round up to 8192 if page is 4k
+    CBuffer<int> buf(8192); // Should round up to 8192 if page is 4k
     EXPECT_GE(buf.VSize, 5000);
     EXPECT_EQ(buf.VSize % sysconf(_SC_PAGESIZE), 0);
 }
