@@ -24,8 +24,7 @@ inline size_t ToNextPageSize(size_t v)
 }
 
 // Circular Buffer of (probably) 4kb, but feels way bigger.
-// And it's super efficient, as it leverages CUPs and
-// RAM's native ops to do the hard work.
+// It leverages CUP and RAM's native ops to do the hard work.
 //
 // VSize: how big the buffer "feels like", will be >= PSize.
 // PSize: how big the buffer actually is. By default (and as a minimum)
@@ -37,18 +36,18 @@ class CBuffer
                   "CBuffer requires a trivially copyable type.");
 
 public:
-    size_t VSize; // Percieved buffer size (>= PSize)
-    size_t PSize; // Physical buffer size (multiple of 4096)
+    size_t VSize; // Virtual buffer size, how much the buffer actually feels like (>= PSize)
+    size_t PSize; // Physical buffer size (multiple of your page size, probably 4096)
     T *Data;      // Buffer
 
-    // Virtual buffer: how big the buffer "feels like", how
+    // Physical size is one page size by default
     CBuffer(size_t vbuffer_size_) : VSize(ToNextPageSize(vbuffer_size_)),
                                     PSize(sysconf(_SC_PAGESIZE))
     {
         Allocate();
     };
 
-    // Custom pbuffer
+    // Custom physical buffer size
     CBuffer(size_t vbuffer_size_,
             size_t pbuffer_size_) : VSize(ToNextPageSize(vbuffer_size_)),
                                     PSize(ToNextPageSize(pbuffer_size_))
