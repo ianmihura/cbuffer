@@ -23,24 +23,16 @@ static double bench(size_t iterations, std::function<void()> fn)
 // ── Reporting ──────────────────────────────────────────────────────
 static void print_header(const size_t count, const size_t iter)
 {
-    printf("\n╔═════════════════════════════════════════════════════════════\n");
-    printf("║ WORKLOAD:  buffer of %ld items (%ld bytes) iters=%ld\n", count, count*sizeof(int32_t), iter);
-    printf("╠═════════════════════════════════════════════════════════════\n");
-    printf("║  %-22s │ %12s │ %12s    \n", "Test", "Buffer (ns)", "CBuffer (ns)");
-    printf("╠═════════════════════════════════════════════════════════════\n");
+    printf(" WORKLOAD:  buffer of %ld items (%ld bytes) iters=%ld\n", count, count*sizeof(int32_t), iter);
+    printf("  %-22s │ %12s │ %12s    \n", "Test", "Buffer (ns)", "CBuffer (ns)");
 }
 
 static void print_row(const char *test, double buf_ns, double cbuf_ns)
 {
     const char *winner = (buf_ns <= cbuf_ns) ? "Buffer" : "CBuffer";
     double ratio = (buf_ns <= cbuf_ns) ? cbuf_ns / buf_ns : buf_ns / cbuf_ns;
-    printf("║  %-22s │ %12.0f │ %12.0f    \n", test, buf_ns, cbuf_ns);
-    printf("║  %22s │   winner: %-8s (%.2fx)     \n", "", winner, ratio);
-}
-
-static void print_footer()
-{
-    printf("╚═════════════════════════════════════════════════════════════\n");
+    printf("  %-22s │ %12.0f │ %12.0f    \n", test, buf_ns, cbuf_ns);
+    printf("  %22s │   winner: %-8s (%.2fx)     \n", "", winner, ratio);
 }
 
 // ── Sequential write benchmark ─────────────────────────────────────
@@ -148,7 +140,6 @@ static void run_bench(const size_t COUNT, const size_t ITERS)
     bench_sequential_write(COUNT, ITERS);
     bench_sequential_read(COUNT, ITERS);
     bench_wraparound_write(COUNT, COUNT * 4, ITERS);
-    print_footer();
 }
 
 int main()

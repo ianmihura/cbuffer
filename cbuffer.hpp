@@ -10,23 +10,17 @@
 #include <type_traits>
 #include <stdexcept>
 
-inline size_t BitCeil(size_t v)
+inline size_t ToNextPageSize(size_t v)
 {
-    return v;
-    // TODO fix this shit
-    if (v <= 1)
+    const size_t PAGE_SIZE = sysconf(_SC_PAGESIZE);
+    if (v < PAGE_SIZE)
     {
-        return 1;
+        return PAGE_SIZE;
     }
-    v--;
-    v |= v >> 1;
-    v |= v >> 2;
-    v |= v >> 4;
-    v |= v >> 8;
-    v |= v >> 16;
-    v |= v >> 32;
-    v++;
-    return v;
+    else
+    {
+        return ((v + PAGE_SIZE - 1) / PAGE_SIZE) * PAGE_SIZE;
+    }
 }
 
 // Circular Buffer of (probably) 4kb, but feels way bigger.
@@ -48,7 +42,7 @@ public:
     T *Data;      // Buffer
 
     // Virtual buffer: how big the buffer "feels like", how
-    CBuffer(size_t vbuffer_size_) : VSize(BitCeil(vbuffer_size_)),
+    CBuffer(size_t vbuffer_size_) : VSize(ToNextPageSize(vbuffer_size_)),
                                     PSize(sysconf(_SC_PAGESIZE))
     {
         Allocate();
@@ -56,8 +50,8 @@ public:
 
     // Custom pbuffer
     CBuffer(size_t vbuffer_size_,
-            size_t pbuffer_size_) : VSize(BitCeil(vbuffer_size_)),
-                                    PSize(BitCeil(pbuffer_size_))
+            size_t pbuffer_size_) : VSize(ToNextPageSize(vbuffer_size_)),
+                                    PSize(ToNextPageSize(pbuffer_size_))
     {
         if (PSize < static_cast<size_t>(sysconf(_SC_PAGESIZE)))
         {
