@@ -12,101 +12,100 @@
 
 struct bench_results
 {
-    uint64_t min_cycles;
-    uint64_t avg_cycles;
+    double seconds;
+    double metric; // currently measuring gbps thruput
 };
 
 bench_results bench(const size_t iter, std::function<void()> fn)
 {
-    uint64_t min_cycles = UINT64_MAX;
-    uint64_t count_cycles = 0;
+    double min_seconds = 10000000.0;
+    struct timespec start, end;
 
     for (int i = 0; i < iter; ++i)
     {
-        std::chrono::high_resolution_clock::now();
-        auto t0 = __rdtsc();
+        clock_gettime(CLOCK_MONOTONIC, &start);
         fn();
-        auto t1 = __rdtsc();
-
-        uint64_t cycles = (t1 - t0);
-        if (cycles < min_cycles)
+        clock_gettime(CLOCK_MONOTONIC, &end);
+        
+        double seconds = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
+        if (seconds < min_seconds)
         {
-            min_cycles = cycles;
+            min_seconds = seconds;
         }
-        count_cycles += cycles;
     }
 
-    return (bench_results){ min_cycles, count_cycles/iter };
+    return (bench_results){ min_seconds };
 }
 
-void print_results(bench_results results, double bytes)
+void print_results(bench_results *results, double bytes)
 {
-    const double cpu_hz = 2.3e9; // My cpu speed
+    double bytes_per_sec = bytes / results->seconds;
+    double gib_per_sec = bytes_per_sec / (1024.0 * 1024.0 * 1024.0);
     
-    double seconds_cbuf = (double)results.min_cycles / cpu_hz;
-    double bytes_per_sec_cbuf = bytes / seconds_cbuf;
-    double gib_per_sec_cbuf = bytes_per_sec_cbuf / (1024.0 * 1024.0 * 1024.0);
-    double items_per_cycle_cbuf = bytes / (double)results.min_cycles;
-    
-    printf("    Best cycle:\n");
-    printf("    Time (s): %.9f\n", seconds_cbuf);
-    printf("    Throughput: %.3f GiB/s  (%.0f B/s)\n", gib_per_sec_cbuf, bytes_per_sec_cbuf);
-    printf("    Items per cycle: %.6f\n", items_per_cycle_cbuf);
-    printf("    Avg cycle:\n");
-    printf("    Time (s): %.9f\n", (double)results.avg_cycles / cpu_hz);
+    printf("    Time (s): %.9f\n", results->seconds);
+    printf("    Throughput: %.3f GiB/s  (%.0f B/s)\n", gib_per_sec, bytes_per_sec);
+
+    (*results).metric = gib_per_sec;
 }
+
+struct bench_results_bufs
+{
+    double cbuf_metric;
+    double buf_metric;
+};
 
 // Writes sequentially through the buffer, element by element.
 // 
 // `iter` how many iterations
 // `count` is length of buffers, how many elements to write per iteration.
-static void bench_sequential_write(size_t count, size_t iter)
+bench_results_bufs bench_sequential_write(size_t count, size_t iter)
 {
-    Buffer<int32_t> buf(count);
-    CBuffer<int32_t> cbuf(0, count * sizeof(int32_t));
+    Buffer<uint8_t> buf(count);
+    CBuffer<uint8_t> cbuf(count * sizeof(uint8_t));
 
-    printf("\nStarting test: sequential write\n");
+    printf("\nSequential write, buffer size: %ld\n", count);
     bench_results bench_results_buf = bench(iter, [&]() {
         for (size_t i = 0; i < count; ++i)
         {
-            buf[i] = static_cast<int32_t>(i);
+            buf[i] = static_cast<uint8_t>(i);
         }
     });
 
     bench_results bench_results_cbuf = bench(iter, [&]() {
         for (size_t i = 0; i < count; ++i)
         {
-            cbuf[i] = static_cast<int32_t>(i);
+            cbuf[i] = static_cast<uint8_t>(i);
         }
     });
-    printf("Done:\n");
-    double bytes = (double)sizeof(int32_t) * count;
+    double bytes = (double)sizeof(uint8_t) * count;
 
-    printf("  Buffer:\n");
-    print_results(bench_results_buf, bytes);
+    printf("  Buffer best run:\n");
+    print_results(&bench_results_buf, bytes);
 
-    printf("  CBuffer:\n");
-    print_results(bench_results_cbuf, bytes);
+    printf("  CBuffer best run:\n");
+    print_results(&bench_results_cbuf, bytes);
+
+    return (bench_results_bufs){ bench_results_cbuf.metric, bench_results_buf.metric };
 }
 
 // Reads sequentially through the buffer, accumulating a checksum.
 // 
 // `iter` how many iterations
 // `count` is length of buffers, how many elements to write per iteration.
-static void bench_sequential_read(size_t count, size_t iter)
+bench_results_bufs bench_sequential_read(size_t count, size_t iter)
 {
-    Buffer<int32_t> buf(count);
-    CBuffer<int32_t> cbuf(0, count * sizeof(int32_t));
+    Buffer<uint8_t> buf(count);
+    CBuffer<uint8_t> cbuf(count * sizeof(uint8_t));
 
     // Pre-fill both buffers identically
     for (size_t i = 0; i < count; ++i)
     {
-        buf[i] = static_cast<int32_t>(i);
-        cbuf[i] = static_cast<int32_t>(i);
+        buf[i] = static_cast<uint8_t>(i);
+        cbuf[i] = static_cast<uint8_t>(i);
     }
     auto expected_sum = count*(count+1)/2 - count;
 
-    printf("\nStarting test: sequential read\n");
+    printf("\nSequential read, buffer size: %ld\n", count);
     bench_results bench_results_buf = bench(iter, [&]() {
         int64_t sum = 0;
         for (size_t i = 0; i < count; ++i)
@@ -124,35 +123,69 @@ static void bench_sequential_read(size_t count, size_t iter)
         }
         assert(expected_sum == sum);
     });
-    printf("Done:\n");
-    double bytes = (double)sizeof(int32_t) * count;
+    double bytes = (double)sizeof(uint8_t) * count;
 
-    printf("  Buffer:\n");
-    print_results(bench_results_buf, bytes);
+    printf("  Buffer best run:\n");
+    print_results(&bench_results_buf, bytes);
 
-    printf("  CBuffer:\n");
-    print_results(bench_results_cbuf, bytes);
+    printf("  CBuffer best run:\n");
+    print_results(&bench_results_cbuf, bytes);
+
+    return (bench_results_bufs){ bench_results_cbuf.metric, bench_results_buf.metric };
 }
 
-// Simulates a circular write where the write index wraps.
-// Buffer uses modulo; CBuffer relies on its virtual aliasing.
+// Writes with a wraparound, element by element.
 // 
 // `iter` how many iterations
 // `count` is length of buffers, how many elements to write per iteration.
-static void bench_wraparound_write(size_t count, size_t iter)
+bench_results_bufs bench_wraparound_write(size_t count, size_t iter)
 {
-    Buffer<int32_t> buf(count);
-    CBuffer<int32_t> cbuf(count * sizeof(int32_t)*2, count * sizeof(int32_t));
+    Buffer<uint8_t> buf(count);
+    CBuffer<uint8_t> cbuf(count * sizeof(uint8_t));
+
+    printf("\nWraparound write, buffer size: %ld\n", count);
+    bench_results bench_results_buf = bench(iter, [&]() {
+        for (size_t i = count; i < 2*count; ++i)
+        {
+            buf[i] = static_cast<uint8_t>(i);
+        }
+    });
+
+    bench_results bench_results_cbuf = bench(iter, [&]() {
+        for (size_t i = count; i < 2*count; ++i)
+        {
+            cbuf[i] = static_cast<uint8_t>(i);
+        }
+    });
+    double bytes = (double)sizeof(uint8_t) * count;
+
+    printf("  Buffer best run:\n");
+    print_results(&bench_results_buf, bytes);
+
+    printf("  CBuffer best run:\n");
+    print_results(&bench_results_cbuf, bytes);
+
+    return (bench_results_bufs){ bench_results_cbuf.metric, bench_results_buf.metric };
+}
+
+// Reads with a wraparound, accumulating a checksum.
+// 
+// `iter` how many iterations
+// `count` is length of buffers, how many elements to write per iteration.
+bench_results_bufs bench_wraparound_read(size_t count, size_t iter)
+{
+    Buffer<uint8_t> buf(count);
+    CBuffer<uint8_t> cbuf(count * sizeof(uint8_t));
 
     // Pre-fill both buffers identically
     for (size_t i = 0; i < count; ++i)
     {
-        buf[i] = static_cast<int32_t>(i);
-        cbuf[i] = static_cast<int32_t>(i);
+        buf[i] = static_cast<uint8_t>(i);
+        cbuf[i] = static_cast<uint8_t>(i);
     }
     auto expected_sum = count*(count+1)/2 - count;
 
-    printf("\nStarting test: sequential read\n");
+    printf("\nWraparound read, buffer size: %ld\n", count);
     bench_results bench_results_buf = bench(iter, [&]() {
         int64_t sum = 0;
         for (size_t i = count; i < 2*count; ++i)
@@ -170,34 +203,36 @@ static void bench_wraparound_write(size_t count, size_t iter)
         }
         assert(expected_sum == sum);
     });
-    printf("Done:\n");
-    double bytes = (double)sizeof(int32_t) * count;
+    double bytes = (double)sizeof(uint8_t) * count;
 
-    printf("  Buffer:\n");
-    print_results(bench_results_buf, bytes);
+    printf("  Buffer best run:\n");
+    print_results(&bench_results_buf, bytes);
 
-    printf("  CBuffer:\n");
-    print_results(bench_results_cbuf, bytes);
+    printf("  CBuffer best run:\n");
+    print_results(&bench_results_cbuf, bytes);
+
+    return (bench_results_bufs){ bench_results_cbuf.metric, bench_results_buf.metric };
 }
 
 int main()
 {
-    // const int _1kb = 1024;
-    // const int _4kb = 4096;
-    // unsigned long _1gb = _1kb * _1kb * _1kb;
+    
+    int loops = 6;
+    size_t counts[6] = {4096, 16*4096, 128*4096, 1024*4096, 2048*4096, 4096*4096};
+    size_t iters[6] = {100000, 10000, 1000, 1000, 100, 100};
 
-    // Buffer<uint8_t> buf(_4kb);                     // 4096 elements of size 1
-    // CBuffer<uint8_t> cbuf(_4kb * sizeof(uint8_t)); // 4096 physical size
+    bench_results_bufs bench_results_metrics[4*loops];
+    for (int i = 0; i < loops; ++i)
+    {
+        bench_results_metrics[0+4*i] = bench_sequential_write(counts[i], iters[i]);
+        bench_results_metrics[1+4*i] = bench_sequential_read(counts[i], iters[i]);
+        bench_results_metrics[2+4*i] = bench_wraparound_write(counts[i], iters[i]);
+        bench_results_metrics[3+4*i] = bench_wraparound_read(counts[i], iters[i]);
+    }
 
-    // Fill(&buf);  // in linux we need to touch every page to initiate it
-    // Fill(&cbuf); // in linux we need to touch every page to initiate it
-
-    size_t COUNT = 10*4096;
-    size_t ITERS = 10000;
-
-    bench_sequential_write(COUNT, ITERS);
-    bench_sequential_read(COUNT, ITERS);
-    bench_wraparound_write(COUNT, ITERS);
+    for (int i = 0; i < 15; ++i) {
+        printf("%lf,%lf\n", bench_results_metrics[i].buf_metric, bench_results_metrics[i].cbuf_metric);
+    }
 
     return 0;
 }
