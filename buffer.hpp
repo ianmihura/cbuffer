@@ -8,8 +8,6 @@
 #include <stdexcept>
 
 // Classic Circular Buffer
-//
-// PSize: how big the buffer actually is.
 template <typename T>
 class Buffer
 {
@@ -31,13 +29,7 @@ public:
     Buffer(const Buffer &) = delete;
     Buffer &operator=(const Buffer &) = delete;
 
-    // TODO implement this version: not count, but size
-    // How many items fit in your buffer
-    // size_t GetItemCount()
-    // {
-    //     return Size / sizeof(T);
-    // };
-
+    // Size of the buffer in bytes
     size_t GetSize()
     {
         return Count * sizeof(T);
@@ -45,12 +37,12 @@ public:
 
     T &operator[](size_t index)
     {
-        return Data[index];
+        return Data[index % Count];
     };
 
     const T &operator[](size_t index) const
     {
-        return Data[index];
+        return Data[index % Count];
     };
 
     T &at(size_t index)
@@ -59,7 +51,7 @@ public:
         {
             throw std::out_of_range("Buffer index out of range");
         }
-        return Data[index];
+        return Data[index % Count];
     };
 
     const T &at(size_t index) const
@@ -68,7 +60,7 @@ public:
         {
             throw std::out_of_range("Buffer index out of range");
         }
-        return Data[index];
+        return Data[index % Count];
     };
 };
 
