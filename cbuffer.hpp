@@ -26,8 +26,8 @@ inline size_t ToNextPageSize(size_t v)
 // Circular Buffer of (probably) 4kb, but feels way bigger.
 // It leverages CUP and RAM's native ops to do the hard work.
 //
-// VSize: how big the buffer "feels like", will be >= PSize.
-// PSize: how big the buffer actually is. By default (and as a minimum)
+// VSize: Virtual buffer size. how big the buffer "feels like", default: 16x the size of the underlying physical buffer. Must be a multiple of 4096.
+// PSize: Physical buffer size. how big the buffer actually is. By default (and as a minimum)
 //        we use your system's page size: sysconf(_SC_PAGESIZE)
 template <typename T>
 class CBuffer
@@ -36,26 +36,40 @@ class CBuffer
                   "CBuffer requires a trivially copyable type.");
 
 public:
-    size_t VSize; // Virtual buffer size, how much the buffer actually feels like (>= PSize)
     size_t PSize; // Physical buffer size (multiple of your page size, probably 4096)
+    size_t VSize; // Virtual buffer size, how much the buffer actually feels like (>= PSize)
     T *Data;      // Buffer
 
-    // Physical size is one page size by default
-    CBuffer(size_t vbuffer_size_) : VSize(ToNextPageSize(vbuffer_size_)),
-                                    PSize(sysconf(_SC_PAGESIZE))
+    // Physical size is one page, usually 4096 (default)
+    // Virtual size is 16x size of the physical buffer (default)
+    CBuffer() : PSize(sysconf(_SC_PAGESIZE)),
+                VSize(16*PSize)
     {
         Allocate();
     };
 
-    // Custom physical buffer size
-    CBuffer(size_t vbuffer_size_,
-            size_t pbuffer_size_) : VSize(ToNextPageSize(vbuffer_size_)),
-                                    PSize(ToNextPageSize(pbuffer_size_))
+    // Custom Physical size (must be multiple of page size)
+    // Virtual size is 16x size of the physical buffer (default)
+    CBuffer(size_t pbuffer_size_) : PSize(ToNextPageSize(pbuffer_size_)),
+                                    VSize(16*PSize)
     {
-        if (PSize < static_cast<size_t>(sysconf(_SC_PAGESIZE)))
-        {
-            PSize = static_cast<size_t>(sysconf(_SC_PAGESIZE));
-        }
+        Allocate();
+    };
+
+    // Physical size is one page, usually 4096 (default)
+    // Custom Virtual size multiplier: is x times sizes of the physical buffer
+    CBuffer(uint8_t vbuffer_mult_) : PSize(sysconf(_SC_PAGESIZE)),
+                                     VSize(vbuffer_mult_*PSize)
+    {
+        Allocate();
+    };
+
+    // Custom Physical size (must be multiple of page size)
+    // Custom Virtual size multiplier: is x times sizes of the physical buffer
+    CBuffer(size_t pbuffer_size_,
+            uint8_t vbuffer_mult_) : PSize(ToNextPageSize(pbuffer_size_)),
+                                     VSize(vbuffer_mult_*PSize)
+    {
         Allocate();
     };
 
