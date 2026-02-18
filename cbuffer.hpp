@@ -117,24 +117,6 @@ public:
         return Data[index];
     };
 
-    T &at(size_t index)
-    {
-        if (index >= GetVItemCount())
-        {
-            throw std::out_of_range("CBuffer index out of range");
-        }
-        return Data[index];
-    };
-
-    const T &at(size_t index) const
-    {
-        if (index >= GetVItemCount())
-        {
-            throw std::out_of_range("CBuffer index out of range");
-        }
-        return Data[index];
-    };
-
 private:
     void Allocate()
     {
@@ -151,6 +133,140 @@ private:
         Data = static_cast<T *>(Base);
 
         int fd = memfd_create("cbuffer", 0);
+        if (fd == -1)
+        {
+            throw std::runtime_error("memfd_create failed");
+        }
+        ftruncate(fd, PSize);
+
+        for (size_t i = 0; i < GetPageCount(); ++i)
+        {
+            void *addr = (char *)Base + (i * PSize);
+            // printf("%d\n", i);
+            if (mmap(addr, PSize, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, fd, 0) == MAP_FAILED)
+            {
+                close(fd);
+                throw std::runtime_error("Physical mapping failed");
+            }
+        }
+        close(fd);
+    };
+};
+
+// Generic Buffer of (probably) 4kb, but feels way bigger.
+// It leverages CUP and RAM's native ops to do the hard work.
+//
+// VSize: Virtual buffer size. how big the buffer "feels like", default: 16x the size of the underlying physical buffer. Must be a multiple of 4096.
+// PSize: Physical buffer size. how big the buffer actually is. By default (and as a minimum)
+//        we use your system's page size: sysconf(_SC_PAGESIZE)
+class CByteBuffer
+{
+public:
+    size_t PSize;    // Physical buffer size (multiple of your page size, probably 4096)
+    size_t VSize;    // Virtual buffer size, how much the buffer actually feels like (>= PSize)
+    std::byte *Data; // Buffer
+    size_t Head;     // Buffer Head
+    size_t Tail;     // Buffer Tail
+
+    // Physical size is one page, usually 4096 (default)
+    // Virtual size is 16x size of the physical buffer (default)
+    CByteBuffer() : PSize(sysconf(_SC_PAGESIZE)),
+                VSize(16*PSize)
+    {
+        Allocate();
+    };
+
+    // Custom Physical size (must be multiple of page size)
+    // Virtual size is 16x size of the physical buffer (default)
+    CByteBuffer(size_t pbuffer_size_) : PSize(ToNextPageSize(pbuffer_size_)),
+                                    VSize(16*PSize)
+    {
+        Allocate();
+    };
+
+    // Physical size is one page, usually 4096 (default)
+    // Custom Virtual size multiplier: is x times sizes of the physical buffer
+    CByteBuffer(uint8_t vbuffer_mult_) : PSize(sysconf(_SC_PAGESIZE)),
+                                     VSize(vbuffer_mult_*PSize)
+    {
+        Allocate();
+    };
+
+    // Custom Physical size (must be multiple of page size)
+    // Custom Virtual size multiplier: is x times sizes of the physical buffer
+    CByteBuffer(size_t pbuffer_size_,
+            uint8_t vbuffer_mult_) : PSize(ToNextPageSize(pbuffer_size_)),
+                                     VSize(vbuffer_mult_*PSize)
+    {
+        Allocate();
+    };
+
+    ~CByteBuffer()
+    {
+        if (Data != nullptr)
+        {
+            if (munmap(Data, VSize) == -1)
+            {
+                const char *error_msg = strerror(errno);
+                fprintf(stderr, "CByteBuffer Cleanup Error: %s\n", error_msg);
+            }
+            Data = nullptr;
+        }
+    };
+
+    CByteBuffer(const CByteBuffer &) = delete;
+    CByteBuffer &operator=(const CByteBuffer &) = delete;
+
+    // Virtual pages over your physical page
+    size_t GetPageCount() const
+    {
+        return VSize / PSize;
+    };
+
+    std::byte &operator[](size_t index)
+    {
+        return Data[index];
+    };
+
+    const std::byte &operator[](size_t index) const
+    {
+        return Data[index];
+    };
+
+    template <typename T>
+    void Push(const T& data) {
+        static_assert(std::is_trivially_copyable_v<T>);
+        const std::byte* ptr = reinterpret_cast<const std::byte*>(&data);
+        std::memcpy(&Data[Head], ptr, sizeof(T));
+        Head += sizeof(T);
+    };
+
+    template <typename T>
+    T Pop() {
+        T data;
+        std::memcpy(&data, &Data[Tail], sizeof(T));
+        Tail += sizeof(T);
+        return data;
+    };
+
+private:
+    void Allocate()
+    {
+        Head = 0;
+        Tail = 0;
+        if (VSize < PSize)
+        {
+            VSize = PSize;
+        }
+
+        void *Base = mmap(NULL, VSize, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (Base == MAP_FAILED)
+        {
+            throw std::runtime_error("Virtual reservation failed");
+        }
+        Data = static_cast<std::byte*>(Base);
+
+        int fd = memfd_create("CByteBuffer", 0);
         if (fd == -1)
         {
             throw std::runtime_error("memfd_create failed");
