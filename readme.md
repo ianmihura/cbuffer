@@ -18,26 +18,30 @@ When an index exceeds the size of the physical buffer, the CPU’s Memory Manage
 ## Usage
 
 ```cpp
-// Create a buffer that feels like 1MB but only uses 4KB of physical RAM
-CBuffer<uint8_t> buffer(1024 * 1024);
+#include "cbuffer.hpp"
 
-// Normal access
-buffer[82] = 12;
+// default page size
+CBuffer<uint8_t> buf();
 
-// Hardware-level wrap-around
-// If PSize is 4096 (1024 floats), this modifies the same memory as buffer[0]
-buffer[82 + 1024] = 51;
+// Fast unchecked access
+buf[100] = 42;
 
-assert(buffer[0] == 51);
+// Hardware wrap-around: indexing beyond the physical page wraps to the same backing page
+buf[100 + buf.GetPItemCount()] = 7; // writes the same physical memory as buf[100]
 
+// Bounds-checked access
+try {
+    auto &v = buf.at(buf.GetVItemCount() - 1);
+} catch (const std::out_of_range &e) {
+    // handle
+}
 ```
 
-### Allocate bigger buffers
-
-```cpp
-// Create a buffer that feels like 10MB but only uses 1MB of physical RAM
-CBuffer<uint8_t> buffer(10 * 1024 * 1024, 1024 * 1024);
-```
+- Constructors (overloads):
+	- `CBuffer()` everything default: `PSize = sysconf(_SC_PAGESIZE)`, `VSize = 16 * PSize`.
+	- `CBuffer(size_t pbuffer_size_)` set `PSize` (rounded up to next page), `VSize = 16 * PSize`.
+	- `CBuffer(uint8_t vbuffer_mult_)` set `PSize = page size`, `VSize = vbuffer_mult_ * PSize`.
+	- `CBuffer(size_t pbuffer_size_, uint8_t vbuffer_mult_)` custom everything: `PSize` and virtual multiplier.
 
 ### Safety Features
 
@@ -46,11 +50,5 @@ The library uses `std::is_trivially_copyable` to ensure only valid data types ar
 * `operator[]`: Maximum speed, no bounds checking.
 * `at()`: Throws `std::out_of_range` if the index exceeds the total **virtual** size.
 
-## Requirements
 
-* **OS**: Linux (Kernel 3.17+ for `memfd_create`)
-* **Language**: C++20
 
-## Installation
-
-Copy `CBuffer.hpp` into your project. Ensure you link with `-pthread` if using in a multi-threaded environment.
