@@ -527,7 +527,7 @@ void byte_buffer_benchmark() {
     int tests = 5;
     int loops = 7; //   4k    64k      512k      4m         8m         16m        256m
     size_t bytes[7] = {4096, 16*4096, 128*4096, 1024*4096, 2048*4096, 4096*4096, 16*4096*4096};
-    size_t iters[7] = {100000, 10000,  1000,     1000,      500,      500,       100};
+    size_t iters[7] = {100000, 10000,  10000,     10000,      1000,      500,       100};
 
     bench_results_bufs bench_results_metrics[tests*loops];
     for (i = 0; i < loops; ++i)
