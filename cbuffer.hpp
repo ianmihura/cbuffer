@@ -200,12 +200,6 @@ public:
         }
     };
 
-    void SoftClear()
-    {
-        Tail = 0;
-        Head = 0;
-    };
-
     CByteBuffer(const CByteBuffer &) = delete;
     CByteBuffer &operator=(const CByteBuffer &) = delete;
 
@@ -228,22 +222,24 @@ public:
     template <typename T>
     void Push(const T& data) {
         static_assert(std::is_trivially_copyable_v<T>);
-        const std::byte* src = reinterpret_cast<const std::byte*>(&data);
 
-        if (Head + sizeof(T) <= VSize)
+        const std::byte* src = reinterpret_cast<const std::byte*>(&data);
+        size_t len = sizeof(T);
+
+        if (Head + len <= VSize)
         {
-            std::memcpy(&Data[Head], src, sizeof(T));
-            Head += sizeof(T);
+            std::memcpy(&Data[Head], src, len);
+            Head += len;
         }
         else
         {
             size_t firstPart = VSize - Head;
-            size_t secondPart = sizeof(T) - firstPart;
+            size_t secondPart = len - firstPart;
             
             std::memcpy(&Data[Head], src, firstPart);
             std::memcpy(&Data[0], src + firstPart, secondPart);
 
-            Head = (Head + sizeof(T)) & VSize-1;
+            Head = (Head + len) & VSize-1;
         }
     };
 

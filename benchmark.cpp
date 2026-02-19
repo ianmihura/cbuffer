@@ -443,6 +443,68 @@ bench_results_bufs bench_wraparound_read_byte(ByteBuffer* buf, CByteBuffer* cbuf
     return (bench_results_bufs){ bench_results_cbuf.metric, bench_results_buf.metric };
 }
 
+// `iter` how many iterations
+// `count` is length of buffers (bytes)
+bench_results_bufs bench_alternate_read_write_byte(ByteBuffer* buf, CByteBuffer* cbuf, size_t count, size_t iter)
+{
+    // Both buffers are already prefilled
+    size_t items = count/sizeof(SomeData);
+    size_t alt_every = 16;
+    size_t expected_alt_sum = alt_every * tmp_.d;
+    size_t expected_tot_sum = items * tmp_.d;
+
+    printf("\nAlternate read/write, buffer size: %ld\n", count);
+    bench_results bench_results_buf = bench(iter, [&]() {
+        int64_t tot_sum = 0;
+        for (size_t i = 0; i < items/alt_every; ++i)
+        {
+            int64_t alt_sum = 0;
+            for (size_t i = 0; i < alt_every; ++i)
+            {
+                buf->Push(tmp_);
+            }
+            for (size_t i = 0; i < alt_every; ++i)
+            {
+                alt_sum += buf->Pop<SomeData>().d;                
+            }
+            KEEP_ALIVE(alt_sum);
+            KEEP_ALIVE(tot_sum);
+            assert(expected_alt_sum == alt_sum);
+            tot_sum += alt_sum;
+        }
+        assert(expected_tot_sum == tot_sum);
+    }, [&](){});
+
+    bench_results bench_results_cbuf = bench(iter, [&]() {
+        int64_t tot_sum = 0;
+        for (size_t i = 0; i < items/alt_every; ++i)
+        {
+            int64_t alt_sum = 0;
+            for (size_t i = 0; i < alt_every; ++i)
+            {
+                cbuf->Push(tmp_);
+            }
+            for (size_t i = 0; i < alt_every; ++i)
+            {
+                alt_sum += cbuf->Pop<SomeData>().d;                
+            }
+            KEEP_ALIVE(alt_sum);
+            KEEP_ALIVE(tot_sum);
+            assert(expected_alt_sum == alt_sum);
+            tot_sum += alt_sum;
+        }
+        assert(expected_tot_sum == tot_sum);
+    }, [&](){});
+
+    printf("  Buffer best run:\n");
+    clean_results(&bench_results_buf, count);
+
+    printf("  CBuffer best run:\n");
+    clean_results(&bench_results_cbuf, count);
+
+    return (bench_results_bufs){ bench_results_cbuf.metric, bench_results_buf.metric };
+}
+
 void byte_buffer_benchmark() {
     int i;
     int loops = 7; //   4k    64k      512k      4m         8m         16m        128m
@@ -454,19 +516,21 @@ void byte_buffer_benchmark() {
     {
         ByteBuffer buf(bytes[i]);
         CByteBuffer cbuf(bytes[i] * sizeof(uint32_t));
-        bench_results_metrics[0+4*i] = bench_sequential_write_byte(&buf, &cbuf, bytes[i], iters[i]);
-        bench_results_metrics[1+4*i] = bench_sequential_read_byte(&buf, &cbuf, bytes[i], iters[i]);
-        bench_results_metrics[2+4*i] = bench_wraparound_write_byte(&buf, &cbuf, bytes[i], iters[i]);
-        bench_results_metrics[3+4*i] = bench_wraparound_read_byte(&buf, &cbuf, bytes[i], iters[i]);
+        bench_results_metrics[0+5*i] = bench_sequential_write_byte(&buf, &cbuf, bytes[i], iters[i]);
+        bench_results_metrics[1+5*i] = bench_sequential_read_byte(&buf, &cbuf, bytes[i], iters[i]);
+        bench_results_metrics[2+5*i] = bench_wraparound_write_byte(&buf, &cbuf, bytes[i], iters[i]);
+        bench_results_metrics[3+5*i] = bench_wraparound_read_byte(&buf, &cbuf, bytes[i], iters[i]);
+        bench_results_metrics[4+5*i] = bench_alternate_read_write_byte(&buf, &cbuf, bytes[i], iters[i]);
     }
     
     printf("bytes,buf_seq_w,cbuf_seq_w,buf_seq_r,cbuf_seq_r,buf_wrap_w,cbuf_wrap_w,buf_wrap_r,cbuf_wrap_r,\n");
     for (i = 0; i < loops; ++i) {
         printf("%d,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf,\n",bytes[i],
-            bench_results_metrics[0+4*i].buf_metric, bench_results_metrics[0+4*i].cbuf_metric,
-            bench_results_metrics[1+4*i].buf_metric, bench_results_metrics[1+4*i].cbuf_metric,
-            bench_results_metrics[2+4*i].buf_metric, bench_results_metrics[2+4*i].cbuf_metric,
-            bench_results_metrics[3+4*i].buf_metric, bench_results_metrics[3+4*i].cbuf_metric
+            bench_results_metrics[0+5*i].buf_metric, bench_results_metrics[0+5*i].cbuf_metric,
+            bench_results_metrics[1+5*i].buf_metric, bench_results_metrics[1+5*i].cbuf_metric,
+            bench_results_metrics[2+5*i].buf_metric, bench_results_metrics[2+5*i].cbuf_metric,
+            bench_results_metrics[3+5*i].buf_metric, bench_results_metrics[3+5*i].cbuf_metric,
+            bench_results_metrics[4+5*i].buf_metric, bench_results_metrics[4+5*i].cbuf_metric
         );
     }
 }
