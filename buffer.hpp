@@ -78,6 +78,14 @@ public:
         std::free(Data);
     };
 
+    void Reset()
+    {
+        // std::free(Data);
+        // Data = static_cast<std::byte *>(std::malloc(Capacity));
+        Head=0;
+        Tail=0;
+    };
+
     ByteBuffer(const ByteBuffer &) = delete;
     ByteBuffer &operator=(const ByteBuffer &) = delete;
 

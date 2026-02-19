@@ -157,11 +157,11 @@ public:
     size_t PSize;    // Physical buffer size (multiple of your page size, probably 4096)
     uint64_t VSize;  // Virtual buffer size, how much the buffer actually feels like (>= PSize)
     std::byte *Data; // Buffer
-    size_t Head;     // Buffer Head
-    size_t Tail;     // Buffer Tail
+    uint64_t Head;   // Buffer Head
+    uint64_t Tail;   // Buffer Tail
 
     // Physical size is one page, usually 4096 (default)
-    // Virtual size is 16x size of the physical buffer (default)
+    // Virtual size is 4GB (default)
     CByteBuffer() : PSize(sysconf(_SC_PAGESIZE)),
                     VSize((uint64_t)4294967296)
                     // VSize(16*PSize)
@@ -170,7 +170,7 @@ public:
     };
 
     // Custom Physical size (must be multiple of page size)
-    // Virtual size is 16x size of the physical buffer (default)
+    // Virtual size is 4GB (default)
     CByteBuffer(size_t pbuffer_size_) : PSize(ToNextPageSize(pbuffer_size_)),
                                         VSize((uint64_t)4294967296)
                                         // VSize(16*PSize)
@@ -198,6 +198,12 @@ public:
             }
             Data = nullptr;
         }
+    };
+
+    void Reset()
+    {
+        Head=0;
+        Tail=0;
     };
 
     CByteBuffer(const CByteBuffer &) = delete;
