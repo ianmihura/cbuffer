@@ -224,29 +224,35 @@ public:
         return Data[index];
     };
 
+
     template <typename T>
     void Push(const T& data) {
         static_assert(std::is_trivially_copyable_v<T>);
+        
+        /// use a direct typed store instead of memcpy
+        *reinterpret_cast<T*>(&Data[Head]) = data;
+        Head += sizeof(T);
 
-        const std::byte* src = reinterpret_cast<const std::byte*>(&data);
-        size_t len = sizeof(T);
-
-        if (Head + len <= VSize)
+        if (__builtin_expect(Head >= VSize, 0))
         {
-            std::memcpy(&Data[Head], src, len);
-            Head += len;
-        }
-        else
-        {
-            size_t firstPart = VSize - Head;
-            size_t secondPart = len - firstPart;
-            
-            std::memcpy(&Data[Head], src, firstPart);
-            std::memcpy(&Data[0], src + firstPart, secondPart);
-
-            Head = (Head + len) & VSize-1;
+            Head -= VSize;
         }
     };
+
+    // template <typename T>
+    // T Pop() {
+    //     static_assert(std::is_trivially_copyable_v<T>);
+
+    //     T data = *reinterpret_cast<const T*>(&Data[Tail]);
+    //     Tail += sizeof(T);
+
+    //     if (__builtin_expect(Tail >= VSize, 0))
+    //     {
+    //         Tail -= VSize;
+    //     }
+
+    //     return data;
+    // };
 
     template <typename T>
     T Pop() {
