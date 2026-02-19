@@ -15,8 +15,8 @@ class Buffer
                   "Buffer requires a trivially copyable type.");
 
 public:
-    int Count; // Max elements in the Buffer
-    T *Data;   // Buffer
+    size_t Count; // Max elements in the Buffer
+    T *Data;      // Buffer
 
     Buffer(size_t count_) : Count(count_),
                             Data(static_cast<T *>(std::malloc(Count * sizeof(T)))) {}
@@ -37,12 +37,26 @@ public:
 
     T &operator[](size_t index)
     {
-        return Data[index % Count];
+        if (index < Count)
+        {
+            return Data[index];
+        }
+        else
+        {
+            return Data[index & Count-1];
+        }
     };
 
     const T &operator[](size_t index) const
     {
-        return Data[index % Count];
+        if (index < Count)
+        {
+            return Data[index];
+        }
+        else
+        {
+            return Data[index & Count-1];
+        }
     };
 };
 
@@ -100,7 +114,7 @@ public:
     };
 
     template <typename T>
-    T Pop() {
+    T Top() {
         T data;
         size_t len = sizeof(T);
         std::byte* dest = reinterpret_cast<std::byte*>(&data);
@@ -116,7 +130,13 @@ public:
             std::memcpy(dest + firstPart, &Data[0], secondPart);
         }
 
-        Tail = (Tail + len) % Capacity;
+        return data;
+    };
+
+    template <typename T>
+    T Pop() {
+        T data = Top<T>();
+        Tail = (Tail + sizeof(T)) % Capacity;
         return data;
     };
 };

@@ -10,8 +10,13 @@
 #include "buffer.hpp"
 #include "cbuffer.hpp"
 
+#define KA 1
+#if KA
 // so compiler doesnt optimize away
 #define KEEP_ALIVE(val) asm volatile("" : : "g"(val) : "memory")
+#else
+#define KEEP_ALIVE(val) // pass
+#endif
 
 struct bench_results
 {
@@ -70,6 +75,7 @@ bench_results_bufs bench_sequential_write(Buffer<uint32_t>* buf, CBuffer<uint32_
         {
             (*buf)[i] = static_cast<uint32_t>(i);
         }
+        KEEP_ALIVE(buf->Data);
     });
 
     bench_results bench_results_cbuf = bench(iter, [&]() {
@@ -77,6 +83,7 @@ bench_results_bufs bench_sequential_write(Buffer<uint32_t>* buf, CBuffer<uint32_
         {
             (*cbuf)[i] = static_cast<uint32_t>(i);
         }
+        KEEP_ALIVE(cbuf->Data);
     });
     double bytes = (double)sizeof(uint32_t) * count;
 
@@ -107,22 +114,21 @@ bench_results_bufs bench_sequential_read(Buffer<uint32_t>* buf, CBuffer<uint32_t
     printf("\nSequential read, buffer size: %ld\n", count);
     bench_results bench_results_buf = bench(iter, [&]() {
         int64_t sum = 0;
-        KEEP_ALIVE(sum);
         for (size_t i = 0; i < count; ++i)
         {
             sum += (*buf)[i];
         }
-        // printf("%ld,%ld\n",expected_sum,sum);
+        KEEP_ALIVE(sum);
         assert(expected_sum == sum);
     });
 
     bench_results bench_results_cbuf = bench(iter, [&]() {
         int64_t sum = 0;
-        KEEP_ALIVE(sum);
         for (size_t i = 0; i < count; ++i)
         {
             sum += (*cbuf)[i];
         }
+        KEEP_ALIVE(sum);
         assert(expected_sum == sum);
     });
     double bytes = (double)sizeof(uint32_t) * count;
@@ -148,6 +154,7 @@ bench_results_bufs bench_wraparound_write(Buffer<uint32_t>* buf, CBuffer<uint32_
         {
             (*buf)[i] = static_cast<uint32_t>(i);
         }
+        KEEP_ALIVE(buf->Data);
     });
 
     bench_results bench_results_cbuf = bench(iter, [&]() {
@@ -155,6 +162,7 @@ bench_results_bufs bench_wraparound_write(Buffer<uint32_t>* buf, CBuffer<uint32_
         {
             (*cbuf)[i] = static_cast<uint32_t>(i);
         }
+        KEEP_ALIVE(cbuf->Data);
     });
     double bytes = (double)sizeof(uint32_t) * count;
 
@@ -185,21 +193,21 @@ bench_results_bufs bench_wraparound_read(Buffer<uint32_t>* buf, CBuffer<uint32_t
     printf("\nWraparound read, buffer size: %ld\n", count);
     bench_results bench_results_buf = bench(iter, [&]() {
         int64_t sum = 0;
-        KEEP_ALIVE(sum);
         for (size_t i = count; i < 2*count; ++i)
         {
             sum += (*buf)[i];
         }
+        KEEP_ALIVE(sum);
         assert(expected_sum == sum);
     });
 
     bench_results bench_results_cbuf = bench(iter, [&]() {
         int64_t sum = 0;
-        KEEP_ALIVE(sum);
         for (size_t i = count; i < 2*count; ++i)
         {
             sum += (*cbuf)[i];
         }
+        KEEP_ALIVE(sum);
         assert(expected_sum == sum);
     });
     double bytes = (double)sizeof(uint32_t) * count;
@@ -217,7 +225,7 @@ void typed_buffer_benchmark() {
     int i;
     int loops = 7; //   4k    64k      512k      4m         8m         16m        128m
     size_t counts[7] = {4096, 16*4096, 128*4096, 1024*4096, 2048*4096, 4096*4096, 16*4096*4096};
-    size_t iters[7] = {100000, 10000, 1000, 1000, 100, 100, 100};
+    size_t iters[7] = {100000, 10000,  1000,     1000,      500,       500,       100};
 
     bench_results_bufs bench_results_metrics[4*loops];
     for (i = 0; i < loops; ++i)

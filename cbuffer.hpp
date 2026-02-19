@@ -242,6 +242,13 @@ public:
     };
 
     template <typename T>
+    T Top() {
+        T data;
+        std::memcpy(&data, &Data[Tail], sizeof(T));
+        return data;
+    };
+
+    template <typename T>
     T Pop() {
         T data;
         std::memcpy(&data, &Data[Tail], sizeof(T));
