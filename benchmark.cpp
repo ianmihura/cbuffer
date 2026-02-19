@@ -62,23 +62,20 @@ struct bench_results_bufs
 // 
 // `iter` how many iterations
 // `count` is length of buffers, how many elements to write per iteration.
-bench_results_bufs bench_sequential_write(size_t count, size_t iter)
+bench_results_bufs bench_sequential_write(Buffer<uint32_t>* buf, CBuffer<uint32_t>* cbuf, size_t count, size_t iter)
 {
-    Buffer<uint32_t> buf(count);
-    CBuffer<uint32_t> cbuf(count * sizeof(uint32_t));
-
     printf("\nSequential write, buffer size: %ld\n", count);
     bench_results bench_results_buf = bench(iter, [&]() {
         for (size_t i = 0; i < count; ++i)
         {
-            buf[i] = static_cast<uint32_t>(i);
+            (*buf)[i] = static_cast<uint32_t>(i);
         }
     });
 
     bench_results bench_results_cbuf = bench(iter, [&]() {
         for (size_t i = 0; i < count; ++i)
         {
-            cbuf[i] = static_cast<uint32_t>(i);
+            (*cbuf)[i] = static_cast<uint32_t>(i);
         }
     });
     double bytes = (double)sizeof(uint32_t) * count;
@@ -96,16 +93,13 @@ bench_results_bufs bench_sequential_write(size_t count, size_t iter)
 // 
 // `iter` how many iterations
 // `count` is length of buffers, how many elements to write per iteration.
-bench_results_bufs bench_sequential_read(size_t count, size_t iter)
+bench_results_bufs bench_sequential_read(Buffer<uint32_t>* buf, CBuffer<uint32_t>* cbuf, size_t count, size_t iter)
 {
-    Buffer<uint32_t> buf(count);
-    CBuffer<uint32_t> cbuf(count * sizeof(uint32_t));
-
     // Pre-fill both buffers identically
     for (size_t i = 0; i < count; ++i)
     {
-        buf[i] = static_cast<uint32_t>(i);
-        cbuf[i] = static_cast<uint32_t>(i);
+        (*buf)[i] = static_cast<uint32_t>(i);
+        (*cbuf)[i] = static_cast<uint32_t>(i);
     }
     size_t expected_sum = count*(count+1)/2 - count;
     // auto expected_sum = count*(UINT8_MAX)/2;
@@ -116,7 +110,7 @@ bench_results_bufs bench_sequential_read(size_t count, size_t iter)
         KEEP_ALIVE(sum);
         for (size_t i = 0; i < count; ++i)
         {
-            sum += buf[i];
+            sum += (*buf)[i];
         }
         // printf("%ld,%ld\n",expected_sum,sum);
         assert(expected_sum == sum);
@@ -127,7 +121,7 @@ bench_results_bufs bench_sequential_read(size_t count, size_t iter)
         KEEP_ALIVE(sum);
         for (size_t i = 0; i < count; ++i)
         {
-            sum += cbuf[i];
+            sum += (*cbuf)[i];
         }
         assert(expected_sum == sum);
     });
@@ -146,23 +140,20 @@ bench_results_bufs bench_sequential_read(size_t count, size_t iter)
 // 
 // `iter` how many iterations
 // `count` is length of buffers, how many elements to write per iteration.
-bench_results_bufs bench_wraparound_write(size_t count, size_t iter)
+bench_results_bufs bench_wraparound_write(Buffer<uint32_t>* buf, CBuffer<uint32_t>* cbuf, size_t count, size_t iter)
 {
-    Buffer<uint32_t> buf(count);
-    CBuffer<uint32_t> cbuf(count * sizeof(uint32_t));
-
     printf("\nWraparound write, buffer size: %ld\n", count);
     bench_results bench_results_buf = bench(iter, [&]() {
         for (size_t i = count; i < 2*count; ++i)
         {
-            buf[i] = static_cast<uint32_t>(i);
+            (*buf)[i] = static_cast<uint32_t>(i);
         }
     });
 
     bench_results bench_results_cbuf = bench(iter, [&]() {
         for (size_t i = count; i < 2*count; ++i)
         {
-            cbuf[i] = static_cast<uint32_t>(i);
+            (*cbuf)[i] = static_cast<uint32_t>(i);
         }
     });
     double bytes = (double)sizeof(uint32_t) * count;
@@ -180,16 +171,13 @@ bench_results_bufs bench_wraparound_write(size_t count, size_t iter)
 // 
 // `iter` how many iterations
 // `count` is length of buffers, how many elements to write per iteration.
-bench_results_bufs bench_wraparound_read(size_t count, size_t iter)
+bench_results_bufs bench_wraparound_read(Buffer<uint32_t>* buf, CBuffer<uint32_t>* cbuf, size_t count, size_t iter)
 {
-    Buffer<uint32_t> buf(count);
-    CBuffer<uint32_t> cbuf(count * sizeof(uint32_t));
-
     // Pre-fill both buffers identically
     for (size_t i = 0; i < count; ++i)
     {
-        buf[i] = static_cast<uint32_t>(i);
-        cbuf[i] = static_cast<uint32_t>(i);
+        (*buf)[i] = static_cast<uint32_t>(i);
+        (*cbuf)[i] = static_cast<uint32_t>(i);
     }
     size_t expected_sum = count*(count+1)/2 - count;
     // auto expected_sum = count*(UINT8_MAX)/2;
@@ -200,7 +188,7 @@ bench_results_bufs bench_wraparound_read(size_t count, size_t iter)
         KEEP_ALIVE(sum);
         for (size_t i = count; i < 2*count; ++i)
         {
-            sum += buf[i];
+            sum += (*buf)[i];
         }
         assert(expected_sum == sum);
     });
@@ -210,7 +198,7 @@ bench_results_bufs bench_wraparound_read(size_t count, size_t iter)
         KEEP_ALIVE(sum);
         for (size_t i = count; i < 2*count; ++i)
         {
-            sum += cbuf[i];
+            sum += (*cbuf)[i];
         }
         assert(expected_sum == sum);
     });
@@ -225,22 +213,23 @@ bench_results_bufs bench_wraparound_read(size_t count, size_t iter)
     return (bench_results_bufs){ bench_results_cbuf.metric, bench_results_buf.metric };
 }
 
-int main()
-{
+void typed_buffer_benchmark() {
     int i;
-    int loops = 6;
-    size_t counts[6] = {4096, 16*4096, 128*4096, 1024*4096, 2048*4096, 4096*4096};
-    size_t iters[6] = {100000, 10000, 1000, 1000, 100, 100};
+    int loops = 7; //   4k    64k      512k      4m         8m         16m        128m
+    size_t counts[7] = {4096, 16*4096, 128*4096, 1024*4096, 2048*4096, 4096*4096, 16*4096*4096};
+    size_t iters[7] = {100000, 10000, 1000, 1000, 100, 100, 100};
 
     bench_results_bufs bench_results_metrics[4*loops];
     for (i = 0; i < loops; ++i)
     {
-        bench_results_metrics[0+4*i] = bench_sequential_write(counts[i], iters[i]);
-        bench_results_metrics[1+4*i] = bench_sequential_read(counts[i], iters[i]);
-        bench_results_metrics[2+4*i] = bench_wraparound_write(counts[i], iters[i]);
-        bench_results_metrics[3+4*i] = bench_wraparound_read(counts[i], iters[i]);
+        Buffer<uint32_t> buf(counts[i]);
+        CBuffer<uint32_t> cbuf(counts[i] * sizeof(uint32_t));
+        bench_results_metrics[0+4*i] = bench_sequential_write(&buf, &cbuf, counts[i], iters[i]);
+        bench_results_metrics[1+4*i] = bench_sequential_read(&buf, &cbuf, counts[i], iters[i]);
+        bench_results_metrics[2+4*i] = bench_wraparound_write(&buf, &cbuf, counts[i], iters[i]);
+        bench_results_metrics[3+4*i] = bench_wraparound_read(&buf, &cbuf, counts[i], iters[i]);
     }
-
+    
     printf("count,buf_seq_w,cbuf_seq_w,buf_seq_r,cbuf_seq_r,buf_wrap_w,cbuf_wrap_w,buf_wrap_r,cbuf_wrap_r,\n");
     for (i = 0; i < loops; ++i) {
         printf("%d,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf,\n",counts[i],
@@ -250,6 +239,16 @@ int main()
             bench_results_metrics[3+4*i].buf_metric, bench_results_metrics[3+4*i].cbuf_metric
         );
     }
+}
+
+void byte_buffer_benchmark() {
+
+}
+
+int main()
+{
+    typed_buffer_benchmark();
+    byte_buffer_benchmark();
 
     return 0;
 }
