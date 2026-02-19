@@ -281,7 +281,6 @@ bench_results_bufs bench_sequential_write_byte(ByteBuffer* buf, CByteBuffer* cbu
 {
     printf("\nSequential write, buffer size: %ld\n", count);
     size_t items = count/sizeof(SomeData);
-    // printf("%ld,%ld,%ld\n",items,count,sizeof(SomeData));
 
     bench_results bench_results_buf = bench(iter, [&]() {
         for (size_t i = 0; i < items; ++i)
@@ -294,7 +293,6 @@ bench_results_bufs bench_sequential_write_byte(ByteBuffer* buf, CByteBuffer* cbu
     bench_results bench_results_cbuf = bench(iter, [&]() {
         for (size_t i = 0; i < items; ++i)
         {
-            // printf("%lld,%ld\n", cbuf->VSize, i);
             cbuf->Push(tmp_);
         }
         KEEP_ALIVE(cbuf->Data);
@@ -334,6 +332,7 @@ bench_results_bufs bench_sequential_read_byte(ByteBuffer* buf, CByteBuffer* cbuf
         {
             buf->Push(tmp_);
         }
+        KEEP_ALIVE(cbuf->Data);
     });
 
     bench_results bench_results_cbuf = bench(iter, [&]() {
@@ -350,6 +349,7 @@ bench_results_bufs bench_sequential_read_byte(ByteBuffer* buf, CByteBuffer* cbuf
         {
             cbuf->Push(tmp_);
         }
+        KEEP_ALIVE(cbuf->Data);
     });
 
     printf("  Buffer best run:\n");
@@ -370,20 +370,32 @@ bench_results_bufs bench_wraparound_write_byte(ByteBuffer* buf, CByteBuffer* cbu
     printf("\nWraparound write, buffer size: %ld\n", count);
     size_t items = count/sizeof(SomeData);
     bench_results bench_results_buf = bench(iter, [&]() {
-        for (size_t i = 0; i < 4*items; ++i)
+        for (size_t i = 0; i < items; ++i)
         {
             buf->Push(tmp_);
         }
         KEEP_ALIVE(buf->Data);
-    }, [&](){});
+    }, [&](){
+        for (size_t i = 0; i < items; ++i)
+        {
+            buf->Push(tmp_);
+        }
+        KEEP_ALIVE(cbuf->Data);
+    });
 
     bench_results bench_results_cbuf = bench(iter, [&]() {
-        for (size_t i = 0; i < 4*items; ++i)
+        for (size_t i = 0; i < items; ++i)
         {
             cbuf->Push(tmp_);
         }
         KEEP_ALIVE(cbuf->Data);
-    }, [&](){});
+    }, [&](){
+        for (size_t i = 0; i < items; ++i)
+        {
+            cbuf->Push(tmp_);
+        }
+        KEEP_ALIVE(cbuf->Data);
+    });
 
     printf("  Buffer best run:\n");
     clean_results(&bench_results_buf, count);
@@ -414,11 +426,11 @@ bench_results_bufs bench_wraparound_read_byte(ByteBuffer* buf, CByteBuffer* cbuf
         KEEP_ALIVE(sum);
         assert(expected_sum == sum);
     }, [&](){
-        // printf("bf,%ld\n",buf->Capacity);
         for (size_t i = 0; i < items; ++i)
         {
             buf->Push(tmp_);
         }
+        KEEP_ALIVE(cbuf->Data);
         buf->Tail = count/2; // set tail in the middle, to force wraparound
     });
 
@@ -435,6 +447,7 @@ bench_results_bufs bench_wraparound_read_byte(ByteBuffer* buf, CByteBuffer* cbuf
         {
             cbuf->Push(tmp_);
         }
+        KEEP_ALIVE(cbuf->Data);
         buf->Tail = count/2; // set tail in the middle, to force wraparound
     });
 

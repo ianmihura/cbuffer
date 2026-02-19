@@ -134,7 +134,6 @@ private:
         for (size_t i = 0; i < GetPageCount(); ++i)
         {
             void *addr = (char *)Base + (i * PSize);
-            // printf("%d\n", i);
             if (mmap(addr, PSize, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, fd, 0) == MAP_FAILED)
             {
                 close(fd);
@@ -296,7 +295,6 @@ private:
         for (size_t i = 0; i < GetPageCount(); ++i)
         {
             void *addr = (char *)Base + (i * PSize);
-            // printf("%d\n", i);
             if (mmap(addr, PSize, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, fd, 0) == MAP_FAILED)
             {
                 munmap(Data, VSize); // try to unmap, otherwise will not exit probram
