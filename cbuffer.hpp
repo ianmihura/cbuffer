@@ -56,14 +56,6 @@ public:
         Allocate();
     };
 
-    // Physical size is one page, usually 4096 (default)
-    // Custom Virtual size multiplier: is x times sizes of the physical buffer
-    CBuffer(uint8_t vbuffer_mult_) : PSize(sysconf(_SC_PAGESIZE)),
-                                     VSize(vbuffer_mult_*PSize)
-    {
-        Allocate();
-    };
-
     // Custom Physical size (must be multiple of page size)
     // Custom Virtual size multiplier: is x times sizes of the physical buffer
     CBuffer(size_t pbuffer_size_,
@@ -156,14 +148,14 @@ private:
 // Generic Buffer of (probably) 4kb, but feels way bigger.
 // It leverages CUP and RAM's native ops to do the hard work.
 //
-// VSize: Virtual buffer size. how big the buffer "feels like", default: 16x the size of the underlying physical buffer. Must be a multiple of 4096.
+// VSize: Virtual buffer size. how big the buffer "feels like", default: 4GB. Previously: 16x the size of the underlying physical buffer. Must be a multiple of 4096.
 // PSize: Physical buffer size. how big the buffer actually is. By default (and as a minimum)
 //        we use your system's page size: sysconf(_SC_PAGESIZE)
 class CByteBuffer
 {
 public:
     size_t PSize;    // Physical buffer size (multiple of your page size, probably 4096)
-    size_t VSize;    // Virtual buffer size, how much the buffer actually feels like (>= PSize)
+    uint64_t VSize;  // Virtual buffer size, how much the buffer actually feels like (>= PSize)
     std::byte *Data; // Buffer
     size_t Head;     // Buffer Head
     size_t Tail;     // Buffer Tail
@@ -171,7 +163,8 @@ public:
     // Physical size is one page, usually 4096 (default)
     // Virtual size is 16x size of the physical buffer (default)
     CByteBuffer() : PSize(sysconf(_SC_PAGESIZE)),
-                VSize(16*PSize)
+                    VSize((uint64_t)4294967296)
+                    // VSize(16*PSize)
     {
         Allocate();
     };
@@ -179,15 +172,8 @@ public:
     // Custom Physical size (must be multiple of page size)
     // Virtual size is 16x size of the physical buffer (default)
     CByteBuffer(size_t pbuffer_size_) : PSize(ToNextPageSize(pbuffer_size_)),
-                                    VSize(16*PSize)
-    {
-        Allocate();
-    };
-
-    // Physical size is one page, usually 4096 (default)
-    // Custom Virtual size multiplier: is x times sizes of the physical buffer
-    CByteBuffer(uint8_t vbuffer_mult_) : PSize(sysconf(_SC_PAGESIZE)),
-                                     VSize(vbuffer_mult_*PSize)
+                                        VSize((uint64_t)4294967296)
+                                        // VSize(16*PSize)
     {
         Allocate();
     };
@@ -214,6 +200,12 @@ public:
         }
     };
 
+    void SoftClear()
+    {
+        Tail = 0;
+        Head = 0;
+    };
+
     CByteBuffer(const CByteBuffer &) = delete;
     CByteBuffer &operator=(const CByteBuffer &) = delete;
 
@@ -236,23 +228,41 @@ public:
     template <typename T>
     void Push(const T& data) {
         static_assert(std::is_trivially_copyable_v<T>);
-        const std::byte* ptr = reinterpret_cast<const std::byte*>(&data);
-        std::memcpy(&Data[Head], ptr, sizeof(T));
-        Head += sizeof(T);
-    };
+        const std::byte* src = reinterpret_cast<const std::byte*>(&data);
 
-    template <typename T>
-    T Top() {
-        T data;
-        std::memcpy(&data, &Data[Tail], sizeof(T));
-        return data;
+        if (Head + sizeof(T) <= VSize)
+        {
+            std::memcpy(&Data[Head], src, sizeof(T));
+            Head += sizeof(T);
+        }
+        else
+        {
+            size_t firstPart = VSize - Head;
+            size_t secondPart = sizeof(T) - firstPart;
+            
+            std::memcpy(&Data[Head], src, firstPart);
+            std::memcpy(&Data[0], src + firstPart, secondPart);
+
+            Head = (Head + sizeof(T)) & VSize-1;
+        }
     };
 
     template <typename T>
     T Pop() {
         T data;
-        std::memcpy(&data, &Data[Tail], sizeof(T));
-        Tail += sizeof(T);
+
+        if (Tail + sizeof(T) <= VSize) {
+            std::memcpy(&data, &Data[Tail], sizeof(T));
+            Tail += sizeof(T);
+        } else {
+            // wrapping
+            size_t firstPart = VSize - Tail;
+            size_t secondPart = sizeof(T) - firstPart;
+            std::memcpy(&data, &Data[Tail], firstPart);
+            std::memcpy(&data + firstPart, &Data[0], secondPart);
+            Tail = (Tail + sizeof(T)) & VSize-1;
+        }
+
         return data;
     };
 
@@ -286,6 +296,7 @@ private:
             // printf("%d\n", i);
             if (mmap(addr, PSize, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, fd, 0) == MAP_FAILED)
             {
+                munmap(Data, VSize); // try to unmap, otherwise will not exit probram
                 close(fd);
                 throw std::runtime_error("Physical mapping failed");
             }
