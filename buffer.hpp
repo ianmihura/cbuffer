@@ -101,6 +101,7 @@ public:
         if (Head + len <= Capacity) {
             // no wrapping
             std::memcpy(&Data[Head], src, len);
+            Head += len;
         } else {
             // wrapping
             size_t firstPart = Capacity - Head;
@@ -108,35 +109,26 @@ public:
             
             std::memcpy(&Data[Head], src, firstPart);
             std::memcpy(&Data[0], src + firstPart, secondPart);
+            Head = (Head + len) & Capacity-1;
         }
-
-        Head = (Head + len) % Capacity;
-    };
-
-    template <typename T>
-    T Top() {
-        T data;
-        size_t len = sizeof(T);
-        std::byte* dest = reinterpret_cast<std::byte*>(&data);
-
-        if (Tail + len <= Capacity) {
-            // no wrapping
-            std::memcpy(dest, &Data[Tail], len);
-        } else {
-            // wrapping
-            size_t firstPart = Capacity - Tail;
-            size_t secondPart = len - firstPart;
-            std::memcpy(dest, &Data[Tail], firstPart);
-            std::memcpy(dest + firstPart, &Data[0], secondPart);
-        }
-
-        return data;
     };
 
     template <typename T>
     T Pop() {
-        T data = Top<T>();
-        Tail = (Tail + sizeof(T)) % Capacity;
+        T data;
+
+        if (Tail + sizeof(T) <= Capacity) {
+            std::memcpy(&data, &Data[Tail], sizeof(T));
+            Tail += sizeof(T);
+        } else {
+            // wrapping
+            size_t firstPart = Capacity - Tail;
+            size_t secondPart = sizeof(T) - firstPart;
+            std::memcpy(&data, &Data[Tail], firstPart);
+            std::memcpy(&data + firstPart, &Data[0], secondPart);
+            Tail = (Tail + sizeof(T)) & Capacity-1;
+        }
+
         return data;
     };
 };
