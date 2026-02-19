@@ -155,7 +155,7 @@ class CByteBuffer
 {
 public:
     size_t PSize;    // Physical buffer size (multiple of your page size, probably 4096)
-    uint64_t VSize;  // Virtual buffer size, how much the buffer actually feels like (>= PSize)
+    size_t VSize;  // Virtual buffer size, how much the buffer actually feels like (>= PSize)
     std::byte *Data; // Buffer
     uint64_t Head;   // Buffer Head
     uint64_t Tail;   // Buffer Tail
@@ -163,7 +163,7 @@ public:
     // Physical size is one page, usually 4096 (default)
     // Virtual size is 4GB (default)
     CByteBuffer() : PSize(sysconf(_SC_PAGESIZE)),
-                    VSize((uint64_t)4294967296)
+                    VSize(4294967296)
                     // VSize(16*PSize)
     {
         Allocate();
@@ -172,7 +172,7 @@ public:
     // Custom Physical size (must be multiple of page size)
     // Virtual size is 4GB (default)
     CByteBuffer(size_t pbuffer_size_) : PSize(ToNextPageSize(pbuffer_size_)),
-                                        VSize((uint64_t)4294967296)
+                                        VSize(4294967296)
                                         // VSize(16*PSize)
     {
         Allocate();
@@ -277,6 +277,7 @@ private:
         {
             VSize = PSize;
         }
+        if (PSize == 4096) VSize = 4294803456; // hotfix: my cpu is not allowing bigger VSize
 
         void *Base = mmap(NULL, VSize, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         if (Base == MAP_FAILED)

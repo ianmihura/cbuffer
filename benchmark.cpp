@@ -222,7 +222,7 @@ bench_results_bufs bench_wraparound_read_typed(Buffer<uint32_t>* buf, CBuffer<ui
 
 void typed_buffer_benchmark() {
     int i;
-    int loops = 7; //   4k    64k      512k      4m         8m         16m        128m
+    int loops = 7; //   4k    64k      512k      4m         8m         16m        256m
     size_t counts[7] = {4096, 16*4096, 128*4096, 1024*4096, 2048*4096, 4096*4096, 16*4096*4096};
     size_t iters[7] = {100000, 10000,  1000,     1000,      500,       500,       100};
 
@@ -271,7 +271,6 @@ bool SomeData::operator==(const SomeData &other) const
     );    
 }
 
-SomeData gen_ = {432134,512,63123,643,97465.000485,32.1};
 SomeData tmp_ = {11209976,0,1414,45,-53153.215,187.1025};
 
 // Writes sequentially through the buffer, element by element.
@@ -282,13 +281,15 @@ bench_results_bufs bench_sequential_write_byte(ByteBuffer* buf, CByteBuffer* cbu
 {
     printf("\nSequential write, buffer size: %ld\n", count);
     size_t items = count/sizeof(SomeData);
+    // printf("%ld,%ld,%ld\n",items,count,sizeof(SomeData));
+
     bench_results bench_results_buf = bench(iter, [&]() {
         for (size_t i = 0; i < items; ++i)
         {
             buf->Push(tmp_);
         }
         KEEP_ALIVE(buf->Data);
-    }, [&](){});
+    }, [&](){ buf->Reset(); });
 
     bench_results bench_results_cbuf = bench(iter, [&]() {
         for (size_t i = 0; i < items; ++i)
@@ -297,7 +298,7 @@ bench_results_bufs bench_sequential_write_byte(ByteBuffer* buf, CByteBuffer* cbu
             cbuf->Push(tmp_);
         }
         KEEP_ALIVE(cbuf->Data);
-    }, [&](){});
+    }, [&](){ cbuf->Reset(); });
 
     printf("  Buffer best run:\n");
     clean_results(&bench_results_buf, count);
@@ -328,6 +329,7 @@ bench_results_bufs bench_sequential_read_byte(ByteBuffer* buf, CByteBuffer* cbuf
         KEEP_ALIVE(sum);
         assert(expected_sum == sum);
     }, [&](){
+        buf->Reset();
         for (size_t i = 0; i < items; ++i)
         {
             buf->Push(tmp_);
@@ -343,6 +345,7 @@ bench_results_bufs bench_sequential_read_byte(ByteBuffer* buf, CByteBuffer* cbuf
         KEEP_ALIVE(sum);
         assert(expected_sum == sum);
     }, [&](){
+        buf->Reset();
         for (size_t i = 0; i < items; ++i)
         {
             cbuf->Push(tmp_);
@@ -517,7 +520,7 @@ void byte_buffer_benchmark() {
     for (i = 0; i < loops; ++i)
     {
         ByteBuffer buf(bytes[i]);
-        CByteBuffer cbuf(bytes[i] * sizeof(uint32_t));
+        CByteBuffer cbuf(bytes[i]);
         bench_results_metrics[0+tests*i] = bench_sequential_write_byte(&buf, &cbuf, bytes[i], iters[i]);
         buf.Reset(); cbuf.Reset();
         bench_results_metrics[1+tests*i] = bench_sequential_read_byte(&buf, &cbuf, bytes[i], iters[i]);
@@ -543,7 +546,7 @@ void byte_buffer_benchmark() {
 
 int main()
 {
-    typed_buffer_benchmark();
+    // typed_buffer_benchmark();
     byte_buffer_benchmark();
 
     return 0;
