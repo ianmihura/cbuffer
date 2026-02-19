@@ -102,42 +102,42 @@ public:
     template <typename T>
     void Push(const T& data) {
         static_assert(std::is_trivially_copyable_v<T>, "Type must be safe to copy via memory");
-    
-        const std::byte* src = reinterpret_cast<const std::byte*>(&data);
-        size_t len = sizeof(T);
 
-        if (Head + len <= Capacity) {
-            // no wrapping
-            std::memcpy(&Data[Head], src, len);
-            Head += len;
+        if (__builtin_expect(Head + sizeof(T) <= Capacity, 1)) {
+            // hot path
+            *reinterpret_cast<T*>(&Data[Head]) = data;
+            Head += sizeof(T);
         } else {
-            // wrapping
+            // cold path
+            const std::byte* src = reinterpret_cast<const std::byte*>(&data);
             size_t firstPart = Capacity - Head;
-            size_t secondPart = len - firstPart;
-            
+            size_t secondPart = sizeof(T) - firstPart;
+
             std::memcpy(&Data[Head], src, firstPart);
             std::memcpy(&Data[0], src + firstPart, secondPart);
-            Head = (Head + len) & Capacity-1;
+            Head = (Head + sizeof(T)) & (Capacity - 1);
         }
     };
 
     template <typename T>
     T Pop() {
-        T data;
+        static_assert(std::is_trivially_copyable_v<T>, "Type must be safe to copy via memory");
 
-        if (Tail + sizeof(T) <= Capacity) {
-            std::memcpy(&data, &Data[Tail], sizeof(T));
+        if (__builtin_expect(Tail + sizeof(T) <= Capacity, 1)) {
+            // hot path
+            T data = *reinterpret_cast<const T*>(&Data[Tail]);
             Tail += sizeof(T);
+            return data;
         } else {
-            // wrapping
+            // cold path
+            T data;
             size_t firstPart = Capacity - Tail;
             size_t secondPart = sizeof(T) - firstPart;
             std::memcpy(&data, &Data[Tail], firstPart);
-            std::memcpy(&data + firstPart, &Data[0], secondPart);
-            Tail = (Tail + sizeof(T)) & Capacity-1;
+            std::memcpy(reinterpret_cast<std::byte*>(&data) + firstPart, &Data[0], secondPart);
+            Tail = (Tail + sizeof(T)) & (Capacity - 1);
+            return data;
         }
-
-        return data;
     };
 };
 
