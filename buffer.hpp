@@ -1,5 +1,20 @@
 #ifndef BUFFER_HPP
 #define BUFFER_HPP
+#include <stdio.h>
+#include <cstdio>
+#include <stdint.h>
+#include <cstdint>
+#include <sys/mman.h>
+#include <unistd.h>
+#include <cerrno>
+#include <cstring>
+#include <type_traits>
+#include <stdexcept>
+#include <cassert>
+#include <functional>
+#include <x86intrin.h>
+#include <sys/time.h>
+
 
 #include <stdio.h>
 #include <stdint.h>
@@ -105,8 +120,10 @@ public:
 
         if (__builtin_expect(Head + sizeof(T) <= Capacity, 1)) {
             // hot path
-            *reinterpret_cast<T*>(&Data[Head]) = data;
+            // *reinterpret_cast<T*>(&Data[Head]) = data;
+            std::memcpy(&Data[Head], &data, sizeof(T));
             Head += sizeof(T);
+            if (Head == Capacity) Head = 0;
         } else {
             // cold path
             const std::byte* src = reinterpret_cast<const std::byte*>(&data);
@@ -115,7 +132,7 @@ public:
 
             std::memcpy(&Data[Head], src, firstPart);
             std::memcpy(&Data[0], src + firstPart, secondPart);
-            Head = (Head + sizeof(T)) & (Capacity - 1);
+            Head = secondPart;
         }
     };
 
@@ -125,8 +142,11 @@ public:
 
         if (__builtin_expect(Tail + sizeof(T) <= Capacity, 1)) {
             // hot path
-            T data = *reinterpret_cast<const T*>(&Data[Tail]);
+            // T data = *reinterpret_cast<const T*>(&Data[Tail]);
+            T data;
+            std::memcpy(&data, &Data[Tail], sizeof(T));
             Tail += sizeof(T);
+            if (Tail == Capacity) Tail = 0;
             return data;
         } else {
             // cold path
@@ -135,7 +155,7 @@ public:
             size_t secondPart = sizeof(T) - firstPart;
             std::memcpy(&data, &Data[Tail], firstPart);
             std::memcpy(reinterpret_cast<std::byte*>(&data) + firstPart, &Data[0], secondPart);
-            Tail = (Tail + sizeof(T)) & (Capacity - 1);
+            Tail = secondPart;
             return data;
         }
     };
