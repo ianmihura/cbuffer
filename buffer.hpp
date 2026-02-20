@@ -120,8 +120,8 @@ public:
 
         if (__builtin_expect(Head + sizeof(T) <= Capacity, 1)) {
             // hot path
-            // *reinterpret_cast<T*>(&Data[Head]) = data;
-            std::memcpy(&Data[Head], &data, sizeof(T));
+            *reinterpret_cast<T*>(&Data[Head]) = data;
+            // std::memcpy(&Data[Head], &data, sizeof(T));
             Head += sizeof(T);
             if (Head == Capacity) Head = 0;
         } else {
@@ -142,9 +142,9 @@ public:
 
         if (__builtin_expect(Tail + sizeof(T) <= Capacity, 1)) {
             // hot path
-            // T data = *reinterpret_cast<const T*>(&Data[Tail]);
-            T data;
-            std::memcpy(&data, &Data[Tail], sizeof(T));
+            T data = *reinterpret_cast<const T*>(&Data[Tail]);
+            // T data;
+            // std::memcpy(&data, &Data[Tail], sizeof(T));
             Tail += sizeof(T);
             if (Tail == Capacity) Tail = 0;
             return data;
