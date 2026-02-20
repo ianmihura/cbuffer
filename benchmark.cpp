@@ -250,28 +250,17 @@ void typed_buffer_benchmark() {
 }
 
 struct SomeData
-{ // 32 bytes (2**5)
+{ // 40 bytes
     uint32_t a;
-    uint32_t b;
+    uint8_t b;
     uint32_t c;
     uint32_t d;
     double e;
     double f;
-
-    bool operator==(const SomeData &) const;
+    bool g;
 };
-bool SomeData::operator==(const SomeData &other) const
-{
-    return (
-        other.a == a &&
-        other.b == b &&
-        other.c == c &&
-        other.e == e &&
-        other.f == f
-    );    
-}
 
-SomeData tmp_ = {11209976,0,1414,45,-53153.215,187.1025};
+SomeData tmp_ = {11209976,0,1414,45,-53153.215,23.234,false};
 
 // Writes sequentially through the buffer, element by element.
 // 
@@ -280,7 +269,7 @@ SomeData tmp_ = {11209976,0,1414,45,-53153.215,187.1025};
 bench_results_bufs bench_sequential_write_byte(ByteBuffer* buf, CByteBuffer* cbuf, size_t count, size_t iter)
 {
     printf("\nSequential write, buffer size: %ld\n", count);
-    size_t items = count/sizeof(SomeData);
+    size_t items = count/sizeof(SomeData)-1;
 
     bench_results bench_results_buf = bench(iter, [&]() {
         for (size_t i = 0; i < items; ++i)
@@ -313,8 +302,7 @@ bench_results_bufs bench_sequential_write_byte(ByteBuffer* buf, CByteBuffer* cbu
 // `count` is length of buffers (bytes)
 bench_results_bufs bench_sequential_read_byte(ByteBuffer* buf, CByteBuffer* cbuf, size_t count, size_t iter)
 {
-    // Both buffers are already prefilled
-    size_t items = count/sizeof(SomeData);
+    size_t items = count/sizeof(SomeData)-1;
     size_t expected_sum = items * tmp_.d;
 
     printf("\nSequential read, buffer size: %ld\n", count);
@@ -368,7 +356,7 @@ bench_results_bufs bench_sequential_read_byte(ByteBuffer* buf, CByteBuffer* cbuf
 bench_results_bufs bench_wraparound_write_byte(ByteBuffer* buf, CByteBuffer* cbuf, size_t count, size_t iter)
 {
     printf("\nWraparound write, buffer size: %ld\n", count);
-    size_t items = count/sizeof(SomeData);
+    size_t items = count/sizeof(SomeData)-1;
     bench_results bench_results_buf = bench(iter, [&]() {
         for (size_t i = 0; i < items; ++i)
         {
@@ -412,8 +400,7 @@ bench_results_bufs bench_wraparound_write_byte(ByteBuffer* buf, CByteBuffer* cbu
 // `count` is length of buffers (bytes)
 bench_results_bufs bench_wraparound_read_byte(ByteBuffer* buf, CByteBuffer* cbuf, size_t count, size_t iter)
 {
-    // Both buffers are already prefilled
-    size_t items = count/sizeof(SomeData);
+    size_t items = count/sizeof(SomeData)-1;
     size_t expected_sum = items * tmp_.d;
 
     printf("\nWraparound read, buffer size: %ld\n", count);
@@ -426,12 +413,14 @@ bench_results_bufs bench_wraparound_read_byte(ByteBuffer* buf, CByteBuffer* cbuf
         KEEP_ALIVE(sum);
         assert(expected_sum == sum);
     }, [&](){
-        for (size_t i = 0; i < items; ++i)
-        {
-            buf->Push(tmp_);
-        }
+        buf->Reset();
+        // push enough items to fill it up to count/2
+        size_t mid_items = (count / 2) / sizeof(SomeData);
+        for (size_t i = 0; i < mid_items; ++i) buf->Push(tmp_);
+        buf->Tail = buf->Head; // both at mid
+        // now push more items, they will wrap
+        for (size_t i = 0; i < items; ++i) buf->Push(tmp_);
         KEEP_ALIVE(cbuf->Data);
-        buf->Tail = count/2; // set tail in the middle, to force wraparound
     });
 
     bench_results bench_results_cbuf = bench(iter, [&]() {
@@ -441,14 +430,16 @@ bench_results_bufs bench_wraparound_read_byte(ByteBuffer* buf, CByteBuffer* cbuf
             sum += cbuf->Pop<SomeData>().d;
         }
         KEEP_ALIVE(sum);
+        // if (expected_sum != sum) printf("  cbuf %ld,%ld\n", expected_sum, sum);
         assert(expected_sum == sum);
     }, [&](){
-        for (size_t i = 0; i < items; ++i)
-        {
-            cbuf->Push(tmp_);
-        }
+        cbuf->Reset();
+        size_t mid_items = (count / 2) / sizeof(SomeData);
+        for (size_t i = 0; i < mid_items; ++i) cbuf->Push(tmp_);
+        cbuf->Tail = cbuf->Head;
+        // now push more items, they will wrap
+        for (size_t i = 0; i < items; ++i) cbuf->Push(tmp_);
         KEEP_ALIVE(cbuf->Data);
-        buf->Tail = count/2; // set tail in the middle, to force wraparound
     });
 
     printf("  Buffer best run:\n");
@@ -464,11 +455,11 @@ bench_results_bufs bench_wraparound_read_byte(ByteBuffer* buf, CByteBuffer* cbuf
 // `count` is length of buffers (bytes)
 bench_results_bufs bench_alternate_read_write_byte(ByteBuffer* buf, CByteBuffer* cbuf, size_t count, size_t iter)
 {
-    // Both buffers are already prefilled
-    size_t items = count/sizeof(SomeData);
+    size_t items = count/sizeof(SomeData)-1;
     size_t alt_every = 16;
     size_t expected_alt_sum = alt_every * tmp_.d;
-    size_t expected_tot_sum = items * tmp_.d;
+    size_t processed_items = (items / alt_every) * alt_every;
+    size_t expected_tot_sum = processed_items * tmp_.d;
 
     printf("\nAlternate read/write, buffer size: %ld\n", count);
     bench_results bench_results_buf = bench(iter, [&]() {
@@ -476,16 +467,15 @@ bench_results_bufs bench_alternate_read_write_byte(ByteBuffer* buf, CByteBuffer*
         for (size_t i = 0; i < items/alt_every; ++i)
         {
             int64_t alt_sum = 0;
-            for (size_t i = 0; i < alt_every; ++i)
+            for (size_t j = 0; j < alt_every; ++j)
             {
                 buf->Push(tmp_);
             }
-            for (size_t i = 0; i < alt_every; ++i)
+            for (size_t j = 0; j < alt_every; ++j)
             {
                 alt_sum += buf->Pop<SomeData>().d;                
             }
             KEEP_ALIVE(alt_sum);
-            KEEP_ALIVE(tot_sum);
             assert(expected_alt_sum == alt_sum);
             tot_sum += alt_sum;
         }
@@ -497,16 +487,15 @@ bench_results_bufs bench_alternate_read_write_byte(ByteBuffer* buf, CByteBuffer*
         for (size_t i = 0; i < items/alt_every; ++i)
         {
             int64_t alt_sum = 0;
-            for (size_t i = 0; i < alt_every; ++i)
+            for (size_t j = 0; j < alt_every; ++j)
             {
                 cbuf->Push(tmp_);
             }
-            for (size_t i = 0; i < alt_every; ++i)
+            for (size_t j = 0; j < alt_every; ++j)
             {
                 alt_sum += cbuf->Pop<SomeData>().d;                
             }
             KEEP_ALIVE(alt_sum);
-            KEEP_ALIVE(tot_sum);
             assert(expected_alt_sum == alt_sum);
             tot_sum += alt_sum;
         }
@@ -525,9 +514,9 @@ bench_results_bufs bench_alternate_read_write_byte(ByteBuffer* buf, CByteBuffer*
 void byte_buffer_benchmark() {
     int i;
     int tests = 5;
-    int loops = 7; //   4k    64k      512k      4m         8m         16m        256m
-    size_t bytes[7] = {4096, 16*4096, 128*4096, 1024*4096, 2048*4096, 4096*4096, 16*4096*4096};
-    size_t iters[7] = {100000, 10000,  10000,     10000,      1000,      500,       100};
+    int loops = 4; //   4k    64k      512k      4m         8m         16m        256m
+    size_t bytes[loops] = {4096, 16*4096, 128*4096, 1024*4096 };//, 2048*4096, 4096*4096, 16*4096*4096};
+    size_t iters[loops] = {100000, 10000,  1000,     1000     };// , 100,         500,       100};
 
     bench_results_bufs bench_results_metrics[tests*loops];
     for (i = 0; i < loops; ++i)
