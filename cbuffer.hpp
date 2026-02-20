@@ -2,13 +2,20 @@
 #define C_BUFFER_HPP
 
 #include <stdio.h>
+#include <cstdio>
 #include <stdint.h>
+#include <cstdint>
 #include <sys/mman.h>
 #include <unistd.h>
 #include <cerrno>
 #include <cstring>
 #include <type_traits>
 #include <stdexcept>
+#include <cassert>
+#include <functional>
+#include <x86intrin.h>
+#include <sys/time.h>
+
 
 inline size_t ToNextPageSize(size_t v)
 {
@@ -225,53 +232,34 @@ public:
     };
 
 
-    template <typename T>
-    void Push(const T& data) {
-        static_assert(std::is_trivially_copyable_v<T>);
-        
-        /// use a direct typed store instead of memcpy
-        *reinterpret_cast<T*>(&Data[Head]) = data;
-        Head += sizeof(T);
+template <typename T>
+void Push(const T& data) {
+    static_assert(std::is_trivially_copyable_v<T>);
+    
+    *reinterpret_cast<T*>(&Data[Head]) = data;
+    Head += sizeof(T);
 
-        if (__builtin_expect(Head >= VSize, 0))
-        {
-            Head -= VSize;
-        }
-    };
+    if (__builtin_expect(Head >= VSize, 0))
+    {
+        Head -= VSize;
+    }
+};
 
-    // template <typename T>
-    // T Pop() {
-    //     static_assert(std::is_trivially_copyable_v<T>);
+template <typename T>
+T Pop() {
+    static_assert(std::is_trivially_copyable_v<T>);
 
-    //     T data = *reinterpret_cast<const T*>(&Data[Tail]);
-    //     Tail += sizeof(T);
+    T data;
+    std::memcpy(&data, &Data[Tail], sizeof(T));
+    Tail += sizeof(T);
 
-    //     if (__builtin_expect(Tail >= VSize, 0))
-    //     {
-    //         Tail -= VSize;
-    //     }
+    if (__builtin_expect(Tail >= VSize, 0))
+    {
+        Tail -= VSize;
+    }
 
-    //     return data;
-    // };
-
-    template <typename T>
-    T Pop() {
-        T data;
-
-        if (Tail + sizeof(T) <= VSize) {
-            std::memcpy(&data, &Data[Tail], sizeof(T));
-            Tail += sizeof(T);
-        } else {
-            // wrapping
-            size_t firstPart = VSize - Tail;
-            size_t secondPart = sizeof(T) - firstPart;
-            std::memcpy(&data, &Data[Tail], firstPart);
-            std::memcpy(&data + firstPart, &Data[0], secondPart);
-            Tail = (Tail + sizeof(T)) & VSize-1;
-        }
-
-        return data;
-    };
+    return data;
+};
 
 private:
     void Allocate()
