@@ -106,12 +106,12 @@ public:
 
     std::byte &operator[](size_t index)
     {
-        return Data[index % Capacity];
+        return Data[index];
     };
 
     const std::byte &operator[](size_t index) const
     {
-        return Data[index % Capacity];
+        return Data[index];
     };
 
     template <typename T>
