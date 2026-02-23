@@ -231,35 +231,57 @@ public:
         return Data[index];
     };
 
+    template <typename T>
+    void Push(const T& data) {
+        static_assert(std::is_trivially_copyable_v<T>);
 
-template <typename T>
-void Push(const T& data) {
-    static_assert(std::is_trivially_copyable_v<T>);
-    
-    *reinterpret_cast<T*>(&Data[Head]) = data;
-    Head += sizeof(T);
+        // printf("%ld,%ld\n", Head, VSize);
+        if (__builtin_expect(Head + sizeof(T) < VSize, 1))
+        {    
+            // use a direct typed store instead of memcpy
+            *reinterpret_cast<T*>(&Data[Head]) = data;
+            Head += sizeof(T);
+        }
+        else
+        {
+            // the virtual buffer is not infinite, we need to manually
+            // manage the wraparound when the data wraps around the virtual.
+            // this happens very rarely, may never happen if you never exceed the virtual size
+            const std::byte* src = reinterpret_cast<const std::byte*>(&data);
+            size_t firstPart = VSize - Head;
+            size_t secondPart = sizeof(T) - firstPart;
 
-    if (__builtin_expect(Head >= VSize, 0))
-    {
-        Head -= VSize;
-    }
-};
+            std::memcpy(&Data[Head], src, firstPart);
+            std::memcpy(&Data[0], src + firstPart, secondPart);
+            Head = (Head + sizeof(T)) & (VSize - 1);
+        }
+    };
 
-template <typename T>
-T Pop() {
-    static_assert(std::is_trivially_copyable_v<T>);
+    template <typename T>
+    T Pop() {
+        static_assert(std::is_trivially_copyable_v<T>);
 
-    T data;
-    std::memcpy(&data, &Data[Tail], sizeof(T));
-    Tail += sizeof(T);
-
-    if (__builtin_expect(Tail >= VSize, 0))
-    {
-        Tail -= VSize;
-    }
-
-    return data;
-};
+        if (__builtin_expect(Tail + sizeof(T) < VSize, 1))
+        {
+            // use a direct typed store instead of memcpy
+            T data = *reinterpret_cast<const T*>(&Data[Tail]);
+            Tail += sizeof(T);
+            return data;
+        }
+        else
+        {
+            // the virtual buffer is not infinite, we need to manually
+            // manage the wraparound when the data wraps around the virtual.
+            // this happens very rarely, may never happen if you never exceed the virtual size
+            T data;
+            size_t firstPart = VSize - Tail;
+            size_t secondPart = sizeof(T) - firstPart;
+            std::memcpy(&data, &Data[Tail], firstPart);
+            std::memcpy(reinterpret_cast<std::byte*>(&data) + firstPart, &Data[0], secondPart);
+            Tail = (Tail + sizeof(T)) & (VSize - 1);
+            return data;
+        }
+    };
 
 private:
     void Allocate()
