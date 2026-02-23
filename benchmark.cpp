@@ -249,18 +249,32 @@ void typed_buffer_benchmark() {
     }
 }
 
+// struct SomeData
+// { // 40 bytes
+//     uint32_t a;
+//     uint8_t b;
+//     uint32_t c;
+//     uint32_t d;
+//     double e;
+//     double f;
+//     bool g;
+// };
+
 struct SomeData
-{ // 40 bytes
+{ // 32 bytes
     uint32_t a;
-    uint8_t b;
     uint32_t c;
     uint32_t d;
-    double e;
-    double f;
-    bool g;
+    uint32_t e;
+    
+    uint32_t f;
+    uint32_t g;
+    uint32_t h;
+    uint32_t i;
 };
 
-SomeData tmp_ = {11209976,0,1414,45,-53153.215,23.234,false};
+// SomeData tmp_ = {11209976,0,1414,45,-53153.215,23.234,false};
+SomeData tmp_ = {11209976,45,53153,23,234};
 
 // Writes sequentially through the buffer, element by element.
 // 
