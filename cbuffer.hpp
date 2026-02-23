@@ -235,7 +235,6 @@ public:
     void Push(const T& data) {
         static_assert(std::is_trivially_copyable_v<T>);
 
-        // printf("%ld,%ld\n", Head, VSize);
         if (__builtin_expect(Head + sizeof(T) < VSize, 1))
         {    
             // use a direct typed store instead of memcpy

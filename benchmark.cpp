@@ -514,11 +514,12 @@ bench_results_bufs bench_alternate_read_write_byte(ByteBuffer* buf, CByteBuffer*
 void byte_buffer_benchmark() {
     int i;
     int tests = 5;
-    int loops = 4; //   4k    64k      512k      4m         8m         16m        256m
-    size_t bytes[loops] = {4096, 16*4096, 128*4096, 1024*4096 };//, 2048*4096, 4096*4096, 16*4096*4096};
-    size_t iters[loops] = {100000, 10000,  1000,     1000     };// , 100,         500,       100};
+    int loops = 7; //   4k    64k      512k      4m         8m         16m        256m
+    size_t bytes[loops] = {4096, 16*4096, 128*4096, 1024*4096 , 2048*4096, 4096*4096, 16*4096*4096};
+    size_t iters[loops] = {100000, 10000,  1000,     1000      , 100,         500,       100};
 
     bench_results_bufs bench_results_metrics[tests*loops];
+    // for (i = loops-1; i >= 0; --i)
     for (i = 0; i < loops; ++i)
     {
         ByteBuffer buf(bytes[i]);
@@ -529,7 +530,7 @@ void byte_buffer_benchmark() {
         buf.Reset(); cbuf.Reset();
         bench_results_metrics[2+tests*i] = bench_wraparound_write_byte(&buf, &cbuf, bytes[i], iters[i]);
         buf.Reset(); cbuf.Reset();
-        bench_results_metrics[3+tests*i] = bench_wraparound_read_byte(&buf, &cbuf, bytes[i], iters[i]); // fails
+        bench_results_metrics[3+tests*i] = bench_wraparound_read_byte(&buf, &cbuf, bytes[i], iters[i]);
         buf.Reset(); cbuf.Reset();
         bench_results_metrics[4+tests*i] = bench_alternate_read_write_byte(&buf, &cbuf, bytes[i], iters[i]);
     }
