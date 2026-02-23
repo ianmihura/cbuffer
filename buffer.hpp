@@ -80,8 +80,8 @@ class ByteBuffer
 public:
     int Capacity;    // Max capacity of Buffer
     std::byte *Data; // Buffer
-    size_t Head;     // Buffer Head
-    size_t Tail;     // Buffer Tail
+    size_t Head;     // Buffer Head: next push
+    size_t Tail;     // Buffer Tail: next pop
 
     ByteBuffer(size_t Capacity_) : Capacity(Capacity_),
                                    Data(static_cast<std::byte *>(std::malloc(Capacity))),

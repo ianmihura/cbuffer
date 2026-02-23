@@ -163,8 +163,8 @@ public:
     size_t PSize;    // Physical buffer size (multiple of your page size, probably 4096)
     size_t VSize;  // Virtual buffer size, how much the buffer actually feels like (>= PSize)
     std::byte *Data; // Buffer
-    uint64_t Head;   // Buffer Head
-    uint64_t Tail;   // Buffer Tail
+    uint64_t Head;   // Buffer Head: next push
+    uint64_t Tail;   // Buffer Tail: next pop
 
     // Physical size is one page, usually 4096 (default)
     // Virtual size is 4GB (default)
